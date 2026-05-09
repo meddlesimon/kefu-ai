@@ -1,0 +1,14 @@
+services:
+  backend:
+    build: ./backend
+    container_name: kefu-backend
+    restart: unless-stopped
+    ports:
+      - "8098:8098"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
+      - /data/kefu-ai:/app/data
+    networks:
+      - default

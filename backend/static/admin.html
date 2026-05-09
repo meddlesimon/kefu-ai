@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 班主任 · RAG 管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F7F7F7;
+  --surface: #FFFFFF;
+  --border: #E5E5E5;
+  --border-hover: #D0D0D0;
+  --text: #111111;
+  --text-2: #555555;
+  --text-3: #999999;
+  --text-4: #CCCCCC;
+  --green: #07C160;
+  --green-light: #2BD47D;
+  --green-dark: #06AD56;
+  --green-bg: rgba(7,193,96,0.06);
+  --green-bg2: rgba(7,193,96,0.10);
+  --green-glow: rgba(7,193,96,0.15);
+  --red: #FA5151;
+  --red-bg: rgba(250,81,81,0.06);
+  --amber: #FFC300;
+  --amber-bg: rgba(255,195,0,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ===== 登录页 ===== */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 32px 28px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.04);
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+.login-logo {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px var(--green-glow);
+}
+.login-logo svg { width: 18px; height: 18px; color: white; }
+.login-brand-text { font-size: 15px; font-weight: 900; }
+.login-brand-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.login-card h1 { font-size: 22px; font-weight: 900; letter-spacing: -0.4px; margin-bottom: 4px; }
+.login-card .sub { font-size: 12px; color: var(--text-3); margin-bottom: 24px; }
+
+.fg { margin-bottom: 14px; }
+.fg-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.fg-input, .input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: all 0.15s;
+}
+.fg-input:focus, .input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-glow);
+}
+
+.btn {
+  padding: 10px 16px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--green-light);
+  border-color: var(--green-light);
+  color: white;
+}
+.btn-danger { color: var(--red); border-color: var(--red); background: white; }
+.btn-danger:hover:not(:disabled) { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.btn-block { width: 100%; padding: 12px; }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+
+.login-error {
+  display: none;
+  padding: 9px 12px;
+  background: var(--red-bg);
+  color: var(--red);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.login-error.show { display: block; }
+
+/* ===== 主界面 ===== */
+.app { display: none; }
+.app.show { display: block; }
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 56px;
+  padding: 0 20px;
+  background: rgba(255,255,255,0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tb-left { display: flex; align-items: center; gap: 10px; }
+.tb-logo {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px var(--green-glow);
+}
+.tb-logo svg { width: 15px; height: 15px; color: white; }
+.tb-title { font-size: 14px; font-weight: 800; }
+.tb-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.tb-right { display: flex; align-items: center; gap: 8px; }
+.tb-stats {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+  padding: 4px 10px;
+  background: var(--green-bg);
+  border-radius: 99px;
+}
+.tb-stats b { color: var(--green); font-weight: 800; }
+.tb-user {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: var(--green-bg);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+}
+.tb-user-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 20px 0;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.tab {
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-3);
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+.tab:hover { color: var(--text); background: var(--surface); }
+.tab.active { color: var(--green); background: var(--surface); border-color: var(--green-bg2); }
+
+.content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 20px 40px;
+}
+.card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.card h2 {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.card .desc {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+.card .desc code {
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 11px;
+}
+.card .desc pre {
+  background: var(--bg);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: 6px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-2);
+  overflow-x: auto;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 280px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  resize: vertical;
+  transition: all 0.15s;
+}
+.textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-glow); }
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.row .spacer { flex: 1; }
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+.checkbox input { width: 14px; height: 14px; accent-color: var(--green); cursor: pointer; }
+
+/* 列表 */
+.entry-list { display: flex; flex-direction: column; gap: 10px; }
+.entry {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  padding: 14px 16px;
+}
+.entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.entry-cat {
+  font-size: 13px;
+  font-weight: 800;
+}
+.entry-meta {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.entry-answer {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--green-bg);
+  border-left: 3px solid var(--green);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+.entry-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-amber { background: var(--amber-bg); color: #D97706; }
+.badge-gray { background: rgba(153,153,153,0.1); color: var(--text-3); }
+
+/* 用户列表 */
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.user-row:last-child { border-bottom: none; }
+.user-name { flex: 1; font-size: 13px; font-weight: 700; }
+.user-meta { font-size: 11px; color: var(--text-3); }
+
+/* 空状态 / loading */
+.empty {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+}
+.empty .icon { font-size: 28px; margin-bottom: 6px; opacity: 0.5; }
+.loading {
+  text-align: center;
+  padding: 18px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 12px; height: 12px;
+  margin-left: 6px;
+  border: 2px solid var(--green-bg2);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 解析预览 */
+.preview {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.preview-item {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.preview-item:last-child { border-bottom: none; }
+.preview-item b { color: var(--text); }
+.preview-empty { color: var(--text-3); font-style: italic; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17,17,17,0.92);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  max-width: 88vw;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+.toast.error { background: rgba(250,81,81,0.95); }
+
+/* 话术挖掘候选卡 */
+.cand-card { padding: 14px; }
+.cand-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cand-cat { font-size: 13px; font-weight: 800; color: var(--text); }
+.cand-meta { font-size: 11px; color: var(--text-3); }
+.cand-block { margin-bottom: 10px; }
+.cand-label { font-size: 11px; color: var(--text-3); font-weight: 700; margin-bottom: 4px; }
+.cand-text {
+  background: var(--bg);
+  border-left: 3px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cand-cleaned .cand-label { color: var(--green-dark); }
+.cand-cleaned textarea { border-color: var(--green); }
+
+/* 数据统计 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.stat-cell {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.stat-cell.stat-hi { background: var(--green-bg); border-color: var(--green); }
+.stat-label { font-size: 11px; color: var(--text-3); font-weight: 600; }
+.stat-num { font-size: 22px; font-weight: 800; color: var(--text); margin: 2px 0; }
+.stat-num small { font-size: 13px; color: var(--text-2); font-weight: 700; }
+.stat-cell.stat-hi .stat-num { color: var(--green-dark); }
+.stat-sub { font-size: 10px; color: var(--text-3); }
+.stat-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-row-rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  background: var(--green-bg); color: var(--green-dark);
+  border-radius: 50%; font-size: 11px; font-weight: 800;
+  flex-shrink: 0;
+}
+.stat-row-name { flex: 1; color: var(--text); font-weight: 600; }
+.stat-row-num { color: var(--text-3); font-size: 12px; }
+
+/* LLM 模型切换 */
+.llm-model {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.llm-model:hover { border-color: #c8c8c8; }
+.llm-model.active {
+  border-color: var(--green);
+  background: var(--green-bg);
+  box-shadow: 0 0 0 3px var(--green-glow);
+}
+.llm-model-row { display: flex; align-items: center; gap: 10px; }
+.llm-model-info { flex: 1; min-width: 0; }
+.llm-model-label { font-size: 13px; font-weight: 800; color: var(--text); }
+.llm-model.active .llm-model-label { color: var(--green-dark); }
+.llm-model-desc { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+.llm-model-id { font-size: 10px; color: var(--text-3); font-family: monospace; margin-top: 2px; }
+.llm-model input[type=radio] { accent-color: var(--green); width: 16px; height: 16px; }
+
+/* 模式切换 */
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+.mode-radio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.mode-radio:hover { border-color: #c8c8c8; }
+.mode-radio input { display: none; }
+.mode-radio.active {
+  border-color: var(--green);
+  background: var(--green-bg);
+  box-shadow: 0 0 0 3px var(--green-glow);
+}
+.mode-title { font-size: 13px; font-weight: 800; color: var(--text); }
+.mode-radio.active .mode-title { color: var(--green-dark); }
+.mode-hint { font-size: 11px; color: var(--text-3); font-weight: 500; }
+
+/* 编辑弹窗 */
+.modal {
+  position: fixed; inset: 0;
+  background: rgba(17,17,17,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 900;
+  visibility: hidden; opacity: 0;
+  transition: opacity 0.18s, visibility 0.18s;
+  pointer-events: none;
+}
+.modal.show { visibility: visible; opacity: 1; pointer-events: auto; }
+.modal-card {
+  background: var(--surface);
+  width: 92%; max-width: 640px; max-height: 88vh;
+  border-radius: 14px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.22);
+  transform: translateY(8px); transition: transform 0.18s;
+}
+.modal.show .modal-card { transform: translateY(0); }
+.modal-head {
+  display: flex; align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title { flex: 1; font-size: 15px; font-weight: 800; color: var(--text); }
+.modal-close {
+  background: transparent; border: none; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--text-3);
+  padding: 0 4px;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-body.loading-state { opacity: 0.55; pointer-events: none; }
+.modal-field { margin-bottom: 12px; }
+.modal-label {
+  display: block;
+  font-size: 12px; font-weight: 700;
+  color: var(--text-2);
+  margin-bottom: 5px;
+}
+.modal-hint { font-weight: 500; color: var(--text-3); margin-left: 6px; }
+.modal-meta {
+  font-size: 11px; color: var(--text-3);
+  padding: 6px 0;
+}
+.modal-error {
+  display: none;
+  font-size: 12px; color: var(--red);
+  background: rgba(250,81,81,0.08);
+  border-left: 3px solid var(--red);
+  padding: 8px 10px; border-radius: 6px;
+  margin-top: 8px;
+}
+.modal-error.show { display: block; }
+.modal-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+.modal-foot .spacer { flex: 1; }
+.modal #edit-answer, .modal #edit-variants {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', monospace;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 登录页 ===== -->
+<div class="login-page" id="login-page">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11.25 14 15 10"/></svg>
+      </div>
+      <div>
+        <div class="login-brand-text">AI 班主任助手</div>
+        <div class="login-brand-sub">RAG 知识库管理后台</div>
+      </div>
+    </div>
+    <h1>欢迎回来 👋</h1>
+    <p class="sub">登录后录入 / 管理知识库</p>
+    <div class="login-error" id="login-error"></div>
+    <form id="login-form">
+      <div class="fg">
+        <label class="fg-label">账号</label>
+        <input type="text" id="login-username" class="fg-input" placeholder="请输入账号" autocomplete="username">
+      </div>
+      <div class="fg">
+        <label class="fg-label">密码</label>
+        <input type="password" id="login-password" class="fg-input" placeholder="••••••" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="login-submit">登录</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===== 主界面 ===== -->
+<div class="app" id="app">
+  <nav class="topbar">
+    <div class="tb-left">
+      <div class="tb-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11.25 14 15 10"/></svg>
+      </div>
+      <div>
+        <div class="tb-title">AI 班主任 · RAG 管理</div>
+        <div class="tb-sub">知识库 · 管理员</div>
+      </div>
+    </div>
+    <div class="tb-right">
+      <span class="tb-stats" id="tb-stats">— / —</span>
+      <span class="tb-user">
+        <span class="tb-user-dot"></span>
+        <span id="tb-user-name">—</span>
+      </span>
+      <button class="btn btn-sm" id="btn-logout">登出</button>
+    </div>
+  </nav>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="ingest">📥 录入</button>
+    <button class="tab" data-tab="library">📚 知识库</button>
+    <button class="tab" data-tab="prompts">🧠 AI 生成 Prompt</button>
+    <button class="tab" data-tab="candidates">💡 话术挖掘</button>
+    <button class="tab" data-tab="stats">📊 数据统计</button>
+    <button class="tab" data-tab="users">👤 管理员</button>
+  </div>
+
+  <div class="content">
+
+    <!-- 录入 -->
+    <div data-pane="ingest">
+      <div class="card">
+        <h2>📥 录入 RAG 条目</h2>
+        <div class="mode-switch">
+          <label class="mode-radio active" data-mode-label="smart">
+            <input type="radio" name="ingest-mode" value="smart" checked>
+            <span class="mode-title">🤖 智能模式</span>
+            <span class="mode-hint">只贴答案,LLM 自动生成分类 + 5 个问法</span>
+          </label>
+          <label class="mode-radio" data-mode-label="structured">
+            <input type="radio" name="ingest-mode" value="structured">
+            <span class="mode-title">📝 结构化模式</span>
+            <span class="mode-hint">自己写"分类 | 问法 | 问法"+ 答案</span>
+          </label>
+        </div>
+        <div class="desc" id="smart-desc">
+          粘贴客服话术,<b>每段用空行分隔</b>。提交后系统会自动:
+          <ol style="margin: 6px 0 8px 18px; padding: 0;">
+            <li>给每段答案推一个分类标签</li>
+            <li>模拟家长用 5 种不同的口语化方式问出对应问题</li>
+            <li>向量化入库</li>
+          </ol>
+          <pre>家长您好~ 关于退费政策,开课 7 天内可全额退费...
+
+亲~ 续费有专属优惠哦,前 50 名续费的家长可以...</pre>
+          <div style="font-size:11px;color:var(--text-3);margin-top:6px;">⏱️ 每段 LLM 生成约 3-5 秒,N 段就要 N × 4 秒左右,耐心等待。</div>
+        </div>
+        <div class="desc" id="structured-desc" hidden>
+          从飞书复制粘贴。<b>每条用空行分隔</b>,第一行 <code>分类 | 问法1 | 问法2 | …</code>,接下来的行是答案(可多行)。
+          <pre>退费咨询 | 想退费 | 能退钱吗
+您好~ 关于退费政策,我们的规则是开课 7 天内可全额退费...
+
+续费咨询 | 想续课 | 还能优惠吗
+亲~ 续费有专属优惠哦...</pre>
+        </div>
+        <textarea class="textarea" id="ingest-text" placeholder="粘贴客服话术,每段用空行分隔..."></textarea>
+        <div class="preview" id="ingest-preview"><span class="preview-empty">输入后实时显示解析结果…</span></div>
+        <div class="row">
+          <label class="checkbox" id="auto-expand-wrap" hidden>
+            <input type="checkbox" id="auto-expand" checked>
+            自动用 LLM 把每条变体扩到 5 个 (qwen-plus)
+          </label>
+          <span class="spacer"></span>
+          <button class="btn" id="btn-clear">清空</button>
+          <button class="btn btn-primary" id="btn-ingest">提交入库</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 知识库 -->
+    <div data-pane="library" hidden>
+      <div class="card" style="padding-bottom:6px;">
+        <div class="row" style="margin-top:0;">
+          <h2 style="margin:0;">📚 知识库</h2>
+          <span class="spacer"></span>
+          <span class="tb-stats" id="library-stats">— / —</span>
+          <button class="btn btn-sm" id="btn-refresh-lib">刷新</button>
+        </div>
+      </div>
+      <div id="library-list"></div>
+    </div>
+
+    <!-- AI 生成 Prompt -->
+    <div data-pane="prompts" hidden>
+      <div class="card">
+        <h2 style="margin:0 0 6px;">🤖 当前 AI 模型</h2>
+        <div class="desc" style="margin-bottom:8px;">
+          切换模型即时生效,影响所有客服侧的 AI 生成。
+        </div>
+        <div id="llm-models"></div>
+      </div>
+
+      <div class="card" style="padding-bottom:6px;">
+        <div class="row" style="margin-top:0;">
+          <h2 style="margin:0;">🧠 AI 生成 Prompt</h2>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" id="btn-refresh-prompts">刷新</button>
+          <button class="btn btn-sm btn-primary" id="btn-new-prompt">+ 新建</button>
+        </div>
+        <div class="desc" style="margin-top:8px;">
+          AI 生成功能用的 system prompt。<b>必须包含 <code>{query}</code> 占位符</b>(LLM 调用时替换为家长问题)。<br>
+          其他占位符(比如未来的 <code>{customer_recent_msgs}</code>)写在 prompt 里安全降级,不会出错。<br>
+          内置 prompt(name=ai_draft) <b>不可删</b>,但可以"恢复默认值"找回最初版本。
+        </div>
+      </div>
+      <div id="prompts-list"></div>
+    </div>
+
+    <!-- 话术挖掘 -->
+    <div data-pane="candidates" hidden>
+      <div class="card" style="padding-bottom:6px;">
+        <div class="row" style="margin-top:0;">
+          <h2 style="margin:0;">💡 话术挖掘</h2>
+          <span class="spacer"></span>
+          <span class="tb-stats" id="cand-stats">— / —</span>
+          <button class="btn btn-sm" id="btn-cand-refresh">刷新</button>
+          <button class="btn btn-sm btn-primary" id="btn-cand-scan">扫描今日候选</button>
+        </div>
+        <div class="desc" style="margin-top:8px;">
+          自动扫描客服真实回复,LLM 评估有价值的话术(≥7 分)沉淀为候选,你审核后入 RAG 库。<br>
+          已有相似话术(≥0.85)、已是 AI 一字不差采用的、过短消息(&lt;20 字)、敷衍话(&lt;7 分) 都会被跳过。
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <label class="checkbox"><input type="radio" name="cand-status" value="pending" checked> 待审核</label>
+          <label class="checkbox"><input type="radio" name="cand-status" value="adopted"> 已采纳</label>
+          <label class="checkbox"><input type="radio" name="cand-status" value="ignored"> 已忽略</label>
+        </div>
+      </div>
+      <div id="candidates-list"></div>
+    </div>
+
+    <!-- 数据统计 -->
+    <div data-pane="stats" hidden>
+      <div class="card" style="padding-bottom:6px;">
+        <div class="row" style="margin-top:0;">
+          <h2 style="margin:0;">📊 数据统计</h2>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" id="btn-refresh-stats">刷新</button>
+        </div>
+        <div class="desc" style="margin-top:6px;">所有"今日"按北京时间今天 0:00 起算,"本周"按本周一 0:00 起算。</div>
+      </div>
+      <div id="stats-content">
+        <div class="loading">加载中</div>
+      </div>
+    </div>
+
+    <!-- 管理员 -->
+    <div data-pane="users" hidden>
+      <div class="card">
+        <h2>👤 创建普通管理员</h2>
+        <div class="desc">普通管理员权限和超管完全一样,只是不可删除超管。<b>没有改密码功能</b>:忘记密码请删除账号重建。</div>
+        <div class="row" style="margin-top:0;">
+          <input type="text" class="input" id="new-user-username" placeholder="用户名" style="flex:1; min-width: 140px;">
+          <input type="password" class="input" id="new-user-password" placeholder="密码" style="flex:1; min-width: 140px;">
+          <button class="btn btn-primary" id="btn-create-user">创建</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row" style="margin-top:0; margin-bottom:8px;">
+          <h2 style="margin:0;">所有管理员</h2>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" id="btn-refresh-users">刷新</button>
+        </div>
+        <div id="users-list"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="edit-modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="modal-title" id="edit-modal-title">编辑 entry</div>
+      <button class="modal-close" id="edit-cancel" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body" id="edit-modal-body">
+      <div class="modal-field">
+        <label class="modal-label">分类</label>
+        <input type="text" class="input" id="edit-cat" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">问法变体 <span class="modal-hint">每行一条,空行会被忽略</span></label>
+        <textarea class="textarea" id="edit-variants" rows="6" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">答案 <span class="modal-hint">原文照搬,换行/空格/标点都保留</span></label>
+        <textarea class="textarea" id="edit-answer" rows="10" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-field" id="edit-attachments-wrap">
+        <label class="modal-label">附件 <span class="modal-hint">图/视频均 ≤10MB(企微硬限制,超过无法发送);客服在 sidebar 命中后会看到</span></label>
+        <div id="edit-attachments-list" style="margin-top:6px;"></div>
+        <div style="margin-top:8px;">
+          <input type="file" id="edit-attachment-input" accept="image/*,video/*" style="display:none">
+          <button type="button" class="btn btn-sm" id="edit-attachment-upload-btn">+ 上传图片/视频</button>
+          <span id="edit-attachment-status" style="font-size:11px;color:var(--text-3);margin-left:8px;"></span>
+        </div>
+      </div>
+      <div class="modal-meta" id="edit-modal-meta"></div>
+      <div class="modal-error" id="edit-modal-error"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-sm" type="button" id="edit-cancel-2" onclick="closeEditModal()">取消</button>
+      <div class="spacer"></div>
+      <button class="btn btn-sm btn-primary" type="button" id="edit-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="prompt-modal">
+  <div class="modal-card" style="max-width: 760px;">
+    <div class="modal-head">
+      <div class="modal-title" id="prompt-modal-title">编辑 prompt</div>
+      <button class="modal-close" id="prompt-cancel" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body" id="prompt-modal-body">
+      <div class="modal-field">
+        <label class="modal-label">name <span class="modal-hint">小写字母/数字/下划线;创建后不可改</span></label>
+        <input type="text" class="input" id="prompt-name-input" placeholder="ai_draft" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">prompt 内容 <span class="modal-hint">必须含 {query};其他 {占位符} 调用时会安全替换</span></label>
+        <textarea class="textarea" id="prompt-content-input" rows="22" spellcheck="false" style="font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',monospace;"></textarea>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">已识别占位符</label>
+        <div id="prompt-placeholders" style="font-size:12px;">—</div>
+      </div>
+      <div class="modal-error" id="prompt-modal-error"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-sm" type="button" onclick="closePromptModal()">取消</button>
+      <div class="spacer"></div>
+      <button class="btn btn-sm btn-primary" type="button" id="prompt-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let JWT = '';
+let CURRENT_USER = null;
+
+// ========== Helpers ==========
+function $(id) { return document.getElementById(id); }
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function showToast(msg, type) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('error', type === 'error');
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+async function api(path, opts) {
+  opts = opts || {};
+  const headers = opts.headers || {};
+  if (JWT) headers['Authorization'] = 'Bearer ' + JWT;
+  if (opts.body && typeof opts.body !== 'string') {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  const r = await fetch(API_BASE + path, { ...opts, headers });
+  let data;
+  try { data = await r.json(); } catch (_) { data = null; }
+  if (r.status === 401) {
+    JWT = '';
+    try { localStorage.removeItem('admin_jwt'); } catch (_) {}
+    showLogin();
+    throw new Error('未登录或登录过期');
+  }
+  if (!r.ok) {
+    const msg = (data && (data.detail || data.error)) || ('HTTP ' + r.status);
+    const e = new Error(msg);
+    e.status = r.status;
+    throw e;
+  }
+  return data;
+}
+function tsToTimeAgo(ts) {
+  const sec = Math.max(0, Math.floor(Date.now()/1000 - ts));
+  if (sec < 60) return sec + ' 秒前';
+  if (sec < 3600) return Math.floor(sec/60) + ' 分前';
+  if (sec < 86400) return Math.floor(sec/3600) + ' 小时前';
+  return Math.floor(sec/86400) + ' 天前';
+}
+
+// ========== 登录 ==========
+function showLogin() {
+  $('login-page').style.display = '';
+  $('app').classList.remove('show');
+}
+function showApp() {
+  $('login-page').style.display = 'none';
+  $('app').classList.add('show');
+  $('tb-user-name').textContent = CURRENT_USER ? CURRENT_USER.username : '—';
+  refreshStats();
+  switchTab('ingest');
+}
+
+$('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = $('login-username').value.trim();
+  const password = $('login-password').value;
+  if (!username || !password) return;
+  $('login-submit').disabled = true;
+  $('login-submit').textContent = '登录中…';
+  $('login-error').classList.remove('show');
+  try {
+    const data = await fetch(API_BASE + '/api/admin/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password}),
+    }).then(r => r.json().then(d => ({status: r.status, body: d})));
+    if (data.status !== 200) {
+      throw new Error(data.body && data.body.detail || '登录失败');
+    }
+    JWT = data.body.jwt;
+    CURRENT_USER = {username: data.body.username, role: data.body.role};
+    try { localStorage.setItem('admin_jwt', JWT); } catch (_) {}
+    showApp();
+  } catch (err) {
+    $('login-error').textContent = err.message;
+    $('login-error').classList.add('show');
+  } finally {
+    $('login-submit').disabled = false;
+    $('login-submit').textContent = '登录';
+  }
+});
+
+$('btn-logout').addEventListener('click', () => {
+  JWT = '';
+  CURRENT_USER = null;
+  try { localStorage.removeItem('admin_jwt'); } catch (_) {}
+  showLogin();
+});
+
+// ========== Tab 切换 ==========
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('[data-pane]').forEach(p => {
+    if (p.dataset.pane === name) p.removeAttribute('hidden');
+    else p.setAttribute('hidden', '');
+  });
+  if (name === 'library') refreshLibrary();
+  if (name === 'users') refreshUsers();
+  if (name === 'prompts') { refreshLLMConfig(); refreshPrompts(); }
+  if (name === 'stats') refreshStatsPage();
+  if (name === 'candidates') refreshCandidates();
+}
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => switchTab(t.dataset.tab));
+});
+
+// ========== 录入 ==========
+function getMode() {
+  const el = document.querySelector('input[name="ingest-mode"]:checked');
+  return el ? el.value : 'smart';
+}
+function applyMode() {
+  const mode = getMode();
+  document.querySelectorAll('.mode-radio').forEach(r => {
+    r.classList.toggle('active', r.dataset.modeLabel === mode);
+  });
+  $('smart-desc').toggleAttribute('hidden', mode !== 'smart');
+  $('structured-desc').toggleAttribute('hidden', mode !== 'structured');
+  $('auto-expand-wrap').toggleAttribute('hidden', mode === 'smart');
+  $('ingest-text').placeholder = mode === 'smart'
+    ? '粘贴客服话术,每段用空行分隔。LLM 会给每段自动生成分类 + 5 个家长问法...'
+    : '把"分类 | 问法 | 问法"+ 答案的 RAG 条目粘贴在这里...';
+  renderPreview(parsePreview($('ingest-text').value));
+}
+document.querySelectorAll('input[name="ingest-mode"]').forEach(r => {
+  r.addEventListener('change', applyMode);
+});
+
+function parsePreview(text) {
+  text = (text || '').trim().replace(/\r\n/g, '\n');
+  if (!text) return [];
+  const blocks = [];
+  let cur = [];
+  for (const line of text.split('\n')) {
+    if (line.trim() === '') {
+      if (cur.length) { blocks.push(cur.join('\n')); cur = []; }
+    } else cur.push(line);
+  }
+  if (cur.length) blocks.push(cur.join('\n'));
+  const mode = getMode();
+  if (mode === 'smart') {
+    return blocks.filter(b => b.trim()).map(b => ({mode: 'smart', answer: b.trim()}));
+  }
+  const entries = [];
+  for (const b of blocks) {
+    const lines = b.split('\n');
+    const header = lines[0].trim();
+    if (!header.includes('|')) continue;
+    const parts = header.split('|').map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) continue;
+    const answer = lines.slice(1).join('\n').trim();
+    if (!answer) continue;
+    entries.push({mode: 'structured', category: parts[0], variants: parts.slice(1), answer});
+  }
+  return entries;
+}
+
+function renderPreview(entries) {
+  const el = $('ingest-preview');
+  const mode = getMode();
+  if (!entries.length) {
+    el.innerHTML = mode === 'smart'
+      ? '<span class="preview-empty">粘贴答案,每段用空行分隔…</span>'
+      : '<span class="preview-empty">没有符合格式的条目…(检查"分类|问法|问法"+空行+答案)</span>';
+    return;
+  }
+  if (mode === 'smart') {
+    el.innerHTML = `<div style="margin-bottom:6px;color:var(--text);font-weight:700;">检测到 ${entries.length} 段答案,提交后会逐条调 LLM 生成分类+5问法:</div>` +
+      entries.map((e, i) => `
+        <div class="preview-item">
+          ${i+1}. <span class="badge badge-amber">待 LLM 生成</span>
+          <div style="color:var(--text-2);margin-top:3px;">↳ ${escapeHTML(e.answer.slice(0,80))}${e.answer.length>80?'…':''}</div>
+        </div>
+      `).join('');
+    return;
+  }
+  el.innerHTML = `<div style="margin-bottom:6px;color:var(--text);font-weight:700;">将解析出 ${entries.length} 条:</div>` +
+    entries.map((e, i) => `
+      <div class="preview-item">
+        ${i+1}. <b>${escapeHTML(e.category)}</b>
+        <span class="badge badge-gray">${e.variants.length} 个问法</span>
+        <span style="color:var(--text-3);">问法: ${escapeHTML(e.variants.join(' / '))}</span>
+        <div style="color:var(--text-2);margin-top:3px;">↳ ${escapeHTML(e.answer.slice(0,60))}${e.answer.length>60?'…':''}</div>
+      </div>
+    `).join('');
+}
+
+$('ingest-text').addEventListener('input', e => {
+  renderPreview(parsePreview(e.target.value));
+});
+$('btn-clear').addEventListener('click', () => {
+  $('ingest-text').value = '';
+  renderPreview([]);
+});
+$('btn-ingest').addEventListener('click', async () => {
+  const text = $('ingest-text').value;
+  if (!text.trim()) { showToast('请粘贴内容'); return; }
+  const mode = getMode();
+  const auto_expand = $('auto-expand').checked;
+  const previewCount = parsePreview(text).length;
+  const btn = $('btn-ingest');
+  btn.disabled = true;
+  if (mode === 'smart') {
+    btn.textContent = `LLM 生成中… 约 ${Math.max(5, previewCount * 4)} 秒`;
+  } else {
+    btn.textContent = '入库中… 可能要 30 秒';
+  }
+  try {
+    const r = await api('/api/admin/rag/ingest', {
+      method: 'POST',
+      body: {text, auto_expand, mode},
+    });
+    let msg = `✅ 解析 ${r.parsed_count} 条,入库 ${r.inserted_count} 条,向量库共 ${r.total_variants_in_db} 条`;
+    if (r.errors && r.errors.length) msg += `(${r.errors.length} 条错)`;
+    showToast(msg);
+    $('ingest-text').value = '';
+    renderPreview([]);
+    refreshStats();
+  } catch (err) {
+    showToast('入库失败: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交入库';
+  }
+});
+
+// 默认进入智能模式
+applyMode();
+
+// ========== 知识库 ==========
+async function refreshLibrary() {
+  const wrap = $('library-list');
+  wrap.innerHTML = '<div class="loading">加载中</div>';
+  try {
+    const list = await api('/api/admin/rag/list');
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty"><div class="icon">📭</div>知识库还空着,去"录入"标签上传第一批吧</div>';
+      return;
+    }
+    wrap.innerHTML = '<div class="entry-list">' + list.map(e => `
+      <div class="entry" data-id="${e.id}">
+        <div class="entry-head">
+          <span class="entry-cat">${escapeHTML(e.category)}</span>
+          <span class="badge badge-green">${e.variant_count} 变体</span>
+          <div class="entry-meta">
+            <span>#${e.id}</span>
+            <span>${escapeHTML(e.created_by || '')}</span>
+            <span>${tsToTimeAgo(e.created_at)}</span>
+            ${e.source ? `<span>· ${escapeHTML(e.source)}</span>` : ''}
+          </div>
+        </div>
+        <div class="entry-answer">${escapeHTML(e.best_answer)}</div>
+        <div class="entry-actions">
+          <button class="btn btn-sm" data-action="edit" data-id="${e.id}">编辑</button>
+          <button class="btn btn-sm btn-danger" data-action="delete" data-id="${e.id}">删除</button>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+$('library-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.dataset.action === 'delete') {
+    if (!confirm(`确认删除 entry #${id}?变体也会一并清掉,不可恢复。`)) return;
+    btn.disabled = true;
+    try {
+      await api('/api/admin/rag/' + id, {method: 'DELETE'});
+      showToast('已删除');
+      refreshLibrary();
+      refreshStats();
+    } catch (err) {
+      showToast('删除失败: ' + err.message, 'error');
+      btn.disabled = false;
+    }
+  } else if (btn.dataset.action === 'edit') {
+    openEditModal(id);
+  }
+});
+
+// ========== 编辑 entry ==========
+let _editingId = null;
+async function openEditModal(id) {
+  _editingId = id;
+  $('edit-modal-title').textContent = `编辑 entry #${id}`;
+  $('edit-cat').value = '';
+  $('edit-answer').value = '';
+  $('edit-variants').value = '';
+  $('edit-modal-error').classList.remove('show');
+  $('edit-modal').classList.add('show');
+  $('edit-modal-body').classList.add('loading-state');
+  try {
+    const d = await api('/api/admin/rag/' + id);
+    $('edit-cat').value = d.category || '';
+    $('edit-answer').value = d.best_answer || '';
+    $('edit-variants').value = (d.variants || []).join('\n');
+    $('edit-modal-meta').textContent =
+      `共 ${(d.variants || []).length} 个变体 · ${d.created_by || '—'} · ${d.source || '—'}`;
+    refreshAttachments(id);
+  } catch (err) {
+    showToast('加载失败: ' + err.message, 'error');
+    closeEditModal();
+  } finally {
+    $('edit-modal-body').classList.remove('loading-state');
+  }
+}
+
+async function refreshAttachments(entryId) {
+  const wrap = $('edit-attachments-list');
+  wrap.innerHTML = '<div style="font-size:12px;color:var(--text-3);">加载中…</div>';
+  try {
+    const list = await api(`/api/admin/rag/${entryId}/attachments`);
+    if (!list.length) {
+      wrap.innerHTML = '<div style="font-size:12px;color:var(--text-3);">暂无附件</div>';
+      return;
+    }
+    wrap.innerHTML = list.map(a => {
+      const mb = a.size / 1024 / 1024;
+      const sizeStr = mb >= 1 ? `${mb.toFixed(1)}MB` : `${(a.size/1024).toFixed(0)}KB`;
+      const icon = a.kind === 'video' ? '🎬' : '🖼️';
+      return `<div style="display:flex;align-items:center;padding:8px 10px;background:var(--green-bg);border-radius:8px;margin-bottom:6px;">
+        <span style="margin-right:8px;font-size:16px;">${icon}</span>
+        <span style="flex:1;font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHTML(a.name || `附件 #${a.id}`)}</span>
+        <span style="font-size:11px;color:var(--text-3);margin:0 10px;">${sizeStr}</span>
+        <button type="button" class="btn btn-sm btn-danger" data-att-delete="${a.id}" style="padding:4px 10px;">×</button>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    wrap.innerHTML = `<div style="color:var(--red);font-size:12px;">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+$('edit-attachment-upload-btn').addEventListener('click', () => {
+  if (!_editingId) { showToast('先保存条目再上传附件', 'error'); return; }
+  $('edit-attachment-input').click();
+});
+
+$('edit-attachment-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file || !_editingId) return;
+  const status = $('edit-attachment-status');
+  // 前端预校验: 企微临时素材硬限制 10MB
+  const MAX = 10 * 1024 * 1024;
+  if (file.size > MAX) {
+    status.style.color = 'var(--red)';
+    status.textContent = `❌ ${(file.size/1024/1024).toFixed(1)}MB 超过 10MB 上限(企微硬限制)`;
+    e.target.value = '';
+    return;
+  }
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    status.style.color = 'var(--red)';
+    status.textContent = '❌ 只支持图片或视频';
+    e.target.value = '';
+    return;
+  }
+  status.style.color = 'var(--text-3)';
+  status.textContent = `上传中 ${file.name} (${(file.size/1024/1024).toFixed(1)}MB)…`;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const r = await fetch(API_BASE + `/api/admin/rag/${_editingId}/attachments`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + JWT },
+      body: fd,
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || ('HTTP ' + r.status));
+    }
+    status.style.color = 'var(--green)';
+    status.textContent = '✓ 上传完成';
+    await refreshAttachments(_editingId);
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  } catch (err) {
+    status.style.color = 'var(--red)';
+    status.textContent = '❌ ' + err.message;
+  } finally {
+    e.target.value = '';
+  }
+});
+
+$('edit-attachments-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-att-delete]');
+  if (!btn) return;
+  if (!confirm('确认删除这个附件?')) return;
+  try {
+    await api('/api/admin/attachments/' + btn.dataset.attDelete, { method: 'DELETE' });
+    refreshAttachments(_editingId);
+  } catch (err) {
+    showToast('删除失败: ' + err.message, 'error');
+  }
+});
+function closeEditModal() {
+  _editingId = null;
+  $('edit-modal').classList.remove('show');
+}
+async function saveEdit() {
+  if (!_editingId) return;
+  const category = $('edit-cat').value.trim();
+  const best_answer = $('edit-answer').value;
+  const variants = $('edit-variants').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  const errBox = $('edit-modal-error');
+  if (!category) { errBox.textContent = '分类不能为空'; errBox.classList.add('show'); return; }
+  if (!best_answer.trim()) { errBox.textContent = '答案不能为空'; errBox.classList.add('show'); return; }
+  if (variants.length === 0) { errBox.textContent = '至少要有一个变体'; errBox.classList.add('show'); return; }
+  errBox.classList.remove('show');
+  $('edit-save').disabled = true;
+  $('edit-save').textContent = '保存中…(重新向量化)';
+  try {
+    await api('/api/admin/rag/' + _editingId, {
+      method: 'PUT',
+      body: { category, best_answer, variants },
+    });
+    showToast('已保存');
+    closeEditModal();
+    refreshLibrary();
+    refreshStats();
+  } catch (err) {
+    errBox.textContent = '保存失败: ' + err.message;
+    errBox.classList.add('show');
+  } finally {
+    $('edit-save').disabled = false;
+    $('edit-save').textContent = '保存';
+  }
+}
+$('edit-cancel').addEventListener('click', closeEditModal);
+$('edit-save').addEventListener('click', saveEdit);
+$('edit-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'edit-modal') closeEditModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('edit-modal').classList.contains('show')) closeEditModal();
+});
+$('btn-refresh-lib').addEventListener('click', refreshLibrary);
+
+// ========== 管理员管理 ==========
+async function refreshUsers() {
+  const wrap = $('users-list');
+  wrap.innerHTML = '<div class="loading">加载中</div>';
+  try {
+    const list = await api('/api/admin/users');
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty">没有管理员</div>';
+      return;
+    }
+    wrap.innerHTML = list.map(u => {
+      const isMe = CURRENT_USER && u.username === CURRENT_USER.username;
+      const isSuper = u.role === 'super';
+      return `
+      <div class="user-row">
+        <span class="user-name">${escapeHTML(u.username)}${isMe ? ' (你)' : ''}</span>
+        <span class="badge ${isSuper ? 'badge-amber' : 'badge-gray'}">${isSuper ? '超管' : '普通'}</span>
+        <span class="user-meta">${escapeHTML(u.created_by || '')} · ${tsToTimeAgo(u.created_at)}</span>
+        ${isSuper ? '<span class="user-meta" style="color:var(--text-4);">不可删</span>' :
+          `<button class="btn btn-sm btn-danger" data-del-user="${escapeHTML(u.username)}">删除</button>`}
+      </div>`;
+    }).join('');
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+$('users-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-del-user]');
+  if (!btn) return;
+  const username = btn.dataset.delUser;
+  if (!confirm(`确认删除管理员 ${username}?该账号将立即失效。`)) return;
+  btn.disabled = true;
+  try {
+    await api('/api/admin/users/' + encodeURIComponent(username), {method: 'DELETE'});
+    showToast('已删除');
+    refreshUsers();
+  } catch (err) {
+    showToast('删除失败: ' + err.message, 'error');
+    btn.disabled = false;
+  }
+});
+
+$('btn-create-user').addEventListener('click', async () => {
+  const username = $('new-user-username').value.trim();
+  const password = $('new-user-password').value;
+  if (!username || !password) { showToast('用户名密码不能为空'); return; }
+  const btn = $('btn-create-user');
+  btn.disabled = true;
+  try {
+    await api('/api/admin/users', {method: 'POST', body: {username, password}});
+    showToast('已创建 ' + username);
+    $('new-user-username').value = '';
+    $('new-user-password').value = '';
+    refreshUsers();
+  } catch (err) {
+    showToast('创建失败: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+$('btn-refresh-users').addEventListener('click', refreshUsers);
+
+// ========== Stats ==========
+async function refreshStats() {
+  try {
+    const s = await api('/api/admin/rag/stats');
+    const txt = `${s.entry_count} 条 · ${s.variant_count} 变体`;
+    $('tb-stats').textContent = txt;
+    $('library-stats').textContent = txt;
+  } catch (_) {}
+}
+
+// ========== 启动 ==========
+(async function init() {
+  // 尝试从 localStorage 恢复 JWT
+  let cached = '';
+  try { cached = localStorage.getItem('admin_jwt') || ''; } catch (_) {}
+  if (cached) {
+    JWT = cached;
+    try {
+      const me = await fetch(API_BASE + '/api/admin/me', {
+        headers: {'Authorization': 'Bearer ' + cached},
+      }).then(r => r.ok ? r.json() : null);
+      if (me) {
+        CURRENT_USER = me;
+        showApp();
+        return;
+      }
+    } catch (_) {}
+    JWT = '';
+    try { localStorage.removeItem('admin_jwt'); } catch (_) {}
+  }
+  showLogin();
+})();
+
+// ========== AI 生成 Prompt 管理 ==========
+// ========== 话术挖掘 ==========
+function _candStatus() {
+  const r = document.querySelector('input[name="cand-status"]:checked');
+  return r ? r.value : 'pending';
+}
+async function refreshCandidates() {
+  const wrap = $('candidates-list');
+  wrap.innerHTML = '<div class="loading">加载中</div>';
+  try {
+    const [stats, list] = await Promise.all([
+      api('/api/admin/candidates/stats'),
+      api('/api/admin/candidates?status=' + _candStatus()),
+    ]);
+    $('cand-stats').textContent = `待审${stats.pending||0} · 已纳${stats.adopted||0} · 已忽${stats.ignored||0}`;
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty"><div class="icon">📭</div>这个状态下没有候选,点上方"扫描今日候选"试试</div>';
+      return;
+    }
+    wrap.innerHTML = list.map(c => {
+      const variants = c.suggested_variants || [];
+      const isPending = c.status === 'pending';
+      return `
+        <div class="card cand-card" data-id="${c.id}">
+          <div class="cand-head">
+            <span class="badge ${c.llm_score >= 9 ? 'badge-green' : 'badge-amber'}">${c.llm_score} 分</span>
+            <span class="cand-cat">${escapeHTML(c.suggested_category||'未分类')}</span>
+            <span class="spacer"></span>
+            <span class="cand-meta">${escapeHTML(c.llm_reason||'')} · ${tsToTimeAgo(c.created_at)}</span>
+          </div>
+          <div class="cand-block">
+            <div class="cand-label">家长问</div>
+            <div class="cand-text">${escapeHTML(c.parent_query)}</div>
+          </div>
+          <div class="cand-block">
+            <div class="cand-label">客服原回复</div>
+            <div class="cand-text">${escapeHTML(c.staff_reply)}</div>
+          </div>
+          <div class="cand-block cand-cleaned">
+            <div class="cand-label">📝 LLM 脱敏建议版本(默认入库用这个)</div>
+            <textarea class="textarea cand-edit-answer" rows="4" data-id="${c.id}" ${isPending?'':'disabled'}>${escapeHTML(c.cleaned_reply||c.staff_reply)}</textarea>
+          </div>
+          <div class="cand-block">
+            <div class="cand-label">📌 入库分类 + 变体(可改)</div>
+            <input type="text" class="input cand-edit-cat" data-id="${c.id}" value="${escapeHTML(c.suggested_category||'')}" ${isPending?'':'disabled'}>
+            <textarea class="textarea cand-edit-vars" rows="3" data-id="${c.id}" ${isPending?'':'disabled'} placeholder="每行一条变体">${variants.map(v=>escapeHTML(v)).join('\n')}\n${escapeHTML(c.parent_query)}</textarea>
+            <div style="font-size:10px;color:var(--text-3);margin-top:4px;">默认会把家长原问 + LLM 推的 4 个变体入库,你可改</div>
+          </div>
+          ${isPending ? `
+            <div class="row" style="margin-top:10px;">
+              <button class="btn btn-sm btn-danger" data-cand-action="ignore" data-id="${c.id}">忽略</button>
+              <span class="spacer"></span>
+              <button class="btn btn-sm btn-primary" data-cand-action="adopt" data-id="${c.id}">采纳入库</button>
+            </div>
+          ` : `
+            <div class="row" style="margin-top:10px;">
+              <span style="font-size:11px;color:var(--text-3);">
+                状态: ${c.status} · 由 ${escapeHTML(c.reviewed_by||'')} 于 ${tsToTimeAgo(c.reviewed_at)} 处理
+                ${c.rag_entry_id ? ` · RAG entry #${c.rag_entry_id}` : ''}
+              </span>
+            </div>
+          `}
+        </div>`;
+    }).join('');
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+$('candidates-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-cand-action]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.candAction;
+  if (action === 'ignore') {
+    btn.disabled = true;
+    try {
+      await api('/api/admin/candidates/' + id + '/ignore', {method: 'POST'});
+      showToast('已忽略');
+      refreshCandidates();
+    } catch (err) { showToast('失败: ' + err.message, 'error'); btn.disabled = false; }
+  } else if (action === 'adopt') {
+    btn.disabled = true; btn.textContent = '入库中…';
+    const card = btn.closest('.cand-card');
+    const answer = card.querySelector('.cand-edit-answer').value;
+    const category = card.querySelector('.cand-edit-cat').value.trim();
+    const variants = card.querySelector('.cand-edit-vars').value
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    if (!answer.trim() || !category) {
+      showToast('分类和答案不能空', 'error');
+      btn.disabled = false; btn.textContent = '采纳入库'; return;
+    }
+    if (variants.length < 1) {
+      showToast('至少 1 个变体', 'error');
+      btn.disabled = false; btn.textContent = '采纳入库'; return;
+    }
+    try {
+      const r = await api('/api/admin/candidates/' + id + '/adopt', {
+        method: 'POST',
+        body: { category, answer, variants },
+      });
+      showToast(`✓ 已入库 RAG #${r.rag_entry_id}`);
+      refreshCandidates();
+      refreshStats();
+    } catch (err) { showToast('失败: ' + err.message, 'error'); btn.disabled = false; btn.textContent = '采纳入库'; }
+  }
+});
+
+$('btn-cand-refresh').addEventListener('click', refreshCandidates);
+document.querySelectorAll('input[name="cand-status"]').forEach(r => r.addEventListener('change', refreshCandidates));
+
+$('btn-cand-scan').addEventListener('click', async () => {
+  const btn = $('btn-cand-scan');
+  btn.disabled = true; btn.textContent = '扫描中…(可能 1-2 分钟)';
+  try {
+    const r = await api('/api/admin/candidates/scan', {method: 'POST'});
+    showToast(`扫描完成: ${r.added}/${r.total} 入候选, ${r.scored} 评估, 跳过短/重复/已有`);
+    refreshCandidates();
+  } catch (err) { showToast('扫描失败: ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '扫描今日候选'; }
+});
+
+// ========== 数据统计 ==========
+function _statBlock(title, d) {
+  return `
+  <div class="card">
+    <h2 style="margin:0 0 8px;">${title}</h2>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="stat-label">客服回复</div><div class="stat-num">${d.staff_replies}</div><div class="stat-sub">条文字</div></div>
+      <div class="stat-cell stat-hi"><div class="stat-label">AI 一字不差采用</div><div class="stat-num">${d.ai_adopted_verbatim || 0}</div><div class="stat-sub">真实发出的</div></div>
+      <div class="stat-cell"><div class="stat-label">采用占回复比</div><div class="stat-num">${((d.verbatim_rate||0)*100).toFixed(0)}<small>%</small></div><div class="stat-sub">不差采用/客服回复</div></div>
+      <div class="stat-cell"><div class="stat-label">点采用按钮</div><div class="stat-num">${d.ai_adopted}</div><div class="stat-sub">次(含改后再发)</div></div>
+      <div class="stat-cell"><div class="stat-label">AI 草稿生成</div><div class="stat-num">${d.ai_generated}</div><div class="stat-sub">次</div></div>
+      <div class="stat-cell"><div class="stat-label">重新生成</div><div class="stat-num">${d.ai_regenerated}</div><div class="stat-sub">次</div></div>
+      <div class="stat-cell"><div class="stat-label">RAG 平均分</div><div class="stat-num">${d.rag_avg_score.toFixed(2)}</div><div class="stat-sub">${d.rag_total} 次检索</div></div>
+      <div class="stat-cell"><div class="stat-label">RAG 高分率</div><div class="stat-num">${(d.rag_high_match_rate*100).toFixed(0)}<small>%</small></div><div class="stat-sub">≥0.85 占比</div></div>
+    </div>
+  </div>`;
+}
+
+async function refreshStatsPage() {
+  const wrap = $('stats-content');
+  wrap.innerHTML = '<div class="loading">加载中</div>';
+  try {
+    const d = await api('/api/admin/stats');
+    let html = '';
+    html += _statBlock('🌅 今日数据', d.today);
+    html += _statBlock('📅 本周数据', d.this_week);
+
+    // Top 10 分类
+    const topC = d.top_categories || [];
+    html += `
+    <div class="card">
+      <h2 style="margin:0 0 6px;">🔥 本周家长最高频的 top 10 分类</h2>
+      <div class="desc" style="margin-bottom:8px;">基于 RAG 命中的 entry 分类聚合,反映家长关注热点。</div>
+      ${topC.length ? topC.map((c, i) => `
+        <div class="stat-row">
+          <span class="stat-row-rank">${i+1}</span>
+          <span class="stat-row-name">${escapeHTML(c.category)}</span>
+          <span class="stat-row-num">${c.count} 次</span>
+        </div>
+      `).join('') : '<div class="empty">暂无数据(本周还没产生 RAG 检索)</div>'}
+    </div>`;
+
+    // 低命中 query
+    const lowQ = d.low_match_queries || [];
+    html += `
+    <div class="card">
+      <h2 style="margin:0 0 6px;">⚠️ 本周低命中 (<0.7) 的家长问 - 知识库缺口</h2>
+      <div class="desc" style="margin-bottom:8px;">这些家长问 RAG 库都没匹配上,建议把它们补成新话术。</div>
+      ${lowQ.length ? lowQ.map((q, i) => `
+        <div class="stat-row">
+          <span class="stat-row-rank">${i+1}</span>
+          <span class="stat-row-name" style="flex:1;">${escapeHTML(q.query)}</span>
+          <span class="stat-row-num"><span class="badge badge-amber">${q.best_score}</span> &middot; ${q.times} 次</span>
+        </div>
+      `).join('') : '<div class="empty">暂无数据(本周所有 query 都≥0.7)</div>'}
+    </div>`;
+
+    wrap.innerHTML = html;
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+$('btn-refresh-stats').addEventListener('click', refreshStatsPage);
+
+
+// ========== LLM 模型切换 ==========
+async function refreshLLMConfig() {
+  const wrap = $('llm-models');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="loading">加载中</div>';
+  try {
+    const d = await api('/api/admin/llm-config');
+    const active = d.active || {};
+    wrap.innerHTML = (d.available || []).map(m => {
+      const isActive = active.provider === m.provider && active.model === m.model;
+      return `
+        <div class="llm-model ${isActive ? 'active' : ''}" data-provider="${escapeHTML(m.provider)}" data-model="${escapeHTML(m.model)}">
+          <div class="llm-model-row">
+            <input type="radio" ${isActive ? 'checked' : ''} disabled>
+            <div class="llm-model-info">
+              <div class="llm-model-label">${escapeHTML(m.label)} <span class="badge badge-gray" style="margin-left:6px;">${escapeHTML(m.provider)}</span></div>
+              <div class="llm-model-desc">${escapeHTML(m.desc)}</div>
+              <div class="llm-model-id">${escapeHTML(m.model)}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  const card = e.target.closest('.llm-model');
+  if (!card || !card.parentElement || card.parentElement.id !== 'llm-models') return;
+  const provider = card.dataset.provider;
+  const model = card.dataset.model;
+  if (card.classList.contains('active')) return;
+  document.querySelectorAll('#llm-models .llm-model').forEach(c => c.classList.remove('active'));
+  card.classList.add('active');
+  card.querySelector('input').checked = true;
+  try {
+    await api('/api/admin/llm-config', {method: 'PUT', body: {provider, model}});
+    showToast(`已切换到 ${model}`);
+  } catch (err) {
+    showToast('切换失败: ' + err.message, 'error');
+    refreshLLMConfig();
+  }
+});
+
+async function refreshPrompts() {
+  const wrap = $('prompts-list');
+  wrap.innerHTML = '<div class="loading">加载中</div>';
+  try {
+    const list = await api('/api/admin/prompts');
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty"><div class="icon">📭</div>还没有 prompt,点"+ 新建"加一个</div>';
+      return;
+    }
+    wrap.innerHTML = '<div class="entry-list">' + list.map(p => `
+      <div class="entry" data-name="${escapeHTML(p.name)}">
+        <div class="entry-head">
+          <span class="entry-cat">${escapeHTML(p.name)}</span>
+          ${p.is_default ? '<span class="badge badge-amber">内置</span>' : ''}
+          <span class="badge badge-gray">${p.char_count} 字</span>
+          <div class="entry-meta">
+            <span>更新: ${tsToTimeAgo(p.updated_at)}</span>
+            <span>${escapeHTML(p.updated_by || '')}</span>
+          </div>
+        </div>
+        <div class="entry-answer" style="max-height:6em; overflow:hidden; position:relative;">
+          ${escapeHTML((p.content || '').slice(0, 240))}${(p.content || '').length > 240 ? '…' : ''}
+        </div>
+        <div class="entry-actions">
+          <button class="btn btn-sm" data-prompt-action="edit" data-name="${escapeHTML(p.name)}">编辑</button>
+          ${p.is_default
+            ? `<button class="btn btn-sm" data-prompt-action="reset" data-name="${escapeHTML(p.name)}">恢复默认值</button>`
+            : `<button class="btn btn-sm btn-danger" data-prompt-action="delete" data-name="${escapeHTML(p.name)}">删除</button>`}
+        </div>
+      </div>
+    `).join('') + '</div>';
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty">加载失败: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+$('prompts-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-prompt-action]');
+  if (!btn) return;
+  const name = btn.dataset.name;
+  const action = btn.dataset.promptAction;
+  if (action === 'edit') {
+    openPromptModal(name);
+  } else if (action === 'delete') {
+    if (!confirm(`确认删除 prompt "${name}"?不可恢复。`)) return;
+    btn.disabled = true;
+    try {
+      await api('/api/admin/prompts/' + encodeURIComponent(name), {method: 'DELETE'});
+      showToast('已删除');
+      refreshPrompts();
+    } catch (err) {
+      showToast('删除失败: ' + err.message, 'error');
+      btn.disabled = false;
+    }
+  } else if (action === 'reset') {
+    if (!confirm(`确认把 "${name}" 重置为代码里的默认值?当前内容会被覆盖。`)) return;
+    btn.disabled = true;
+    try {
+      await api('/api/admin/prompts/' + encodeURIComponent(name) + '/reset', {method: 'POST'});
+      showToast('已恢复默认值');
+      refreshPrompts();
+    } catch (err) {
+      showToast('恢复失败: ' + err.message, 'error');
+      btn.disabled = false;
+    }
+  }
+});
+$('btn-refresh-prompts').addEventListener('click', refreshPrompts);
+$('btn-new-prompt').addEventListener('click', () => openPromptModal(null));
+
+// ----- 模态框 -----
+let _editingPromptName = null;
+async function openPromptModal(name) {
+  _editingPromptName = name;
+  $('prompt-modal-title').textContent = name ? `编辑 prompt: ${name}` : '新建 prompt';
+  $('prompt-name-input').value = name || '';
+  $('prompt-name-input').disabled = !!name;
+  $('prompt-content-input').value = '';
+  $('prompt-modal-error').classList.remove('show');
+  $('prompt-placeholders').textContent = '—';
+  $('prompt-modal').classList.add('show');
+  if (name) {
+    $('prompt-modal-body').classList.add('loading-state');
+    try {
+      const d = await api('/api/admin/prompts/' + encodeURIComponent(name));
+      $('prompt-content-input').value = d.content || '';
+      updatePromptPlaceholders();
+    } catch (err) {
+      showToast('加载失败: ' + err.message, 'error');
+      closePromptModal();
+    } finally {
+      $('prompt-modal-body').classList.remove('loading-state');
+    }
+  }
+}
+function closePromptModal() {
+  _editingPromptName = null;
+  $('prompt-modal').classList.remove('show');
+}
+function updatePromptPlaceholders() {
+  const text = $('prompt-content-input').value;
+  const matches = [...new Set((text.match(/\{[a-z_][a-z0-9_]*\}/gi) || []))];
+  const wrap = $('prompt-placeholders');
+  if (!matches.length) {
+    wrap.innerHTML = '<span style="color:var(--red)">⚠️ 未识别到任何占位符,至少需要 {query}</span>';
+    return;
+  }
+  wrap.innerHTML = matches.map(m => {
+    const known = m === '{query}';
+    return `<span class="badge ${known ? 'badge-green' : 'badge-amber'}" style="margin-right:4px;">${m}${known ? '' : ' (未知,会降级为空)'}</span>`;
+  }).join('');
+}
+$('prompt-content-input') && $('prompt-content-input').addEventListener('input', updatePromptPlaceholders);
+
+async function savePrompt() {
+  const name = ($('prompt-name-input').value || '').trim();
+  const content = $('prompt-content-input').value;
+  const errBox = $('prompt-modal-error');
+  if (!_editingPromptName) {
+    if (!name) { errBox.textContent = 'name 不能为空'; errBox.classList.add('show'); return; }
+    if (!/^[a-z0-9_]+$/.test(name)) {
+      errBox.textContent = 'name 只能用小写字母、数字、下划线'; errBox.classList.add('show'); return;
+    }
+  }
+  if (!content.trim()) { errBox.textContent = 'prompt 内容不能为空'; errBox.classList.add('show'); return; }
+  if (!content.includes('{query}')) {
+    errBox.textContent = '必须包含 {query} 占位符(家长问题会被替换进来)'; errBox.classList.add('show'); return;
+  }
+  errBox.classList.remove('show');
+  $('prompt-save').disabled = true;
+  $('prompt-save').textContent = '保存中…';
+  try {
+    if (_editingPromptName) {
+      await api('/api/admin/prompts/' + encodeURIComponent(_editingPromptName), {
+        method: 'PUT', body: { content },
+      });
+    } else {
+      await api('/api/admin/prompts', { method: 'POST', body: { name, content } });
+    }
+    showToast('已保存');
+    closePromptModal();
+    refreshPrompts();
+  } catch (err) {
+    errBox.textContent = '保存失败: ' + err.message;
+    errBox.classList.add('show');
+  } finally {
+    $('prompt-save').disabled = false;
+    $('prompt-save').textContent = '保存';
+  }
+}
+$('prompt-save').addEventListener('click', savePrompt);
+$('prompt-cancel').addEventListener('click', closePromptModal);
+$('prompt-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'prompt-modal') closePromptModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('prompt-modal').classList.contains('show')) closePromptModal();
+});
+</script>
+
+</body>
+</html>

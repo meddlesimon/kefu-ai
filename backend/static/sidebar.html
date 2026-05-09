@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AI 班主任助手</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://res.wx.qq.com/open/js/jweixin-1.2.0.js"></script>
+<script src="https://wwcdn.weixin.qq.com/node/open/js/jwxwork-1.0.0.js"></script>
+<style>
+:root {
+  --bg: #F7F7F7;
+  --surface: #FFFFFF;
+  --border: #E5E5E5;
+  --border-hover: #D0D0D0;
+  --text: #111111;
+  --text-2: #555555;
+  --text-3: #999999;
+  --text-4: #CCCCCC;
+  --green: #07C160;
+  --green-light: #2BD47D;
+  --green-dark: #06AD56;
+  --green-bg: rgba(7,193,96,0.06);
+  --green-bg2: rgba(7,193,96,0.10);
+  --green-glow: rgba(7,193,96,0.15);
+  --red: #FA5151;
+  --red-bg: rgba(250,81,81,0.06);
+  --amber: #FFC300;
+  --amber-bg: rgba(255,195,0,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+  padding-bottom: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  padding: 0 16px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tb-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tb-logo {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px var(--green-glow);
+}
+.tb-logo svg { width: 15px; height: 15px; color: white; }
+.tb-titles { min-width: 0; }
+.tb-title { font-size: 14px; font-weight: 800; letter-spacing: -0.2px; }
+.tb-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tb-user {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: var(--green-bg);
+  font-size: 10px; font-weight: 700; color: var(--green);
+  flex-shrink: 0;
+}
+.tb-user-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.tb-user.warn { background: var(--amber-bg); color: #D97706; }
+.tb-user.warn .tb-user-dot { background: var(--amber); }
+
+.section {
+  margin: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  transition: border-color 0.15s;
+}
+.section-title {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.section-title-tail { font-size: 11px; color: var(--text-4); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.round-nav-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.round-nav {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+.round-nav:hover:not(:disabled) {
+  color: var(--green);
+  background: var(--green-bg);
+}
+.round-nav:disabled {
+  color: var(--text-4);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.round-label {
+  font-size: 10px;
+  color: var(--text-3);
+  font-weight: 700;
+  min-width: 56px;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.round-label.unresponded { color: var(--green); }
+
+.responded-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.responded-badge.unresponded { background: var(--green-bg); color: var(--green); }
+.responded-badge.responded { background: rgba(153,153,153,0.1); color: var(--text-3); }
+
+.customer-msg {
+  padding: 12px 14px;
+  background: var(--green-bg);
+  border-radius: 10px;
+  border-left: 3px solid var(--green);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 40px;
+}
+.customer-msg.empty {
+  background: var(--bg);
+  border-left-color: var(--text-4);
+  color: var(--text-3);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* 消息列表 (每条带搜索按钮) */
+.msg-list {
+  background: var(--green-bg);
+  border-left: 3px solid var(--green);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.msg-row {
+  display: flex;
+  align-items: stretch;
+  padding: 8px 4px 8px 12px;
+  gap: 4px;
+  border-bottom: 1px solid rgba(7,193,96,0.1);
+}
+.msg-row:last-child { border-bottom: none; }
+.msg-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  align-self: center;
+  padding-right: 4px;
+}
+.msg-search-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  align-self: center;
+  transition: all 0.12s;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+}
+.msg-search-btn:hover {
+  color: var(--green);
+  background: var(--green-bg2);
+}
+.msg-search-btn:active { transform: scale(0.92); }
+.msg-search-btn svg { width: 14px; height: 14px; }
+.customer-meta {
+  font-size: 10px;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+.customer-meta-item { display: inline-flex; align-items: center; gap: 3px; }
+.section-title-left { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* AI 推荐草稿卡 */
+.ai-draft-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--green-bg);
+  border: 1.5px solid var(--green);
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px var(--green-glow);
+}
+.ai-draft-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ai-draft-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--green-dark);
+}
+.ai-draft-meta {
+  flex: 1;
+  text-align: right;
+  font-size: 10px;
+  color: var(--text-3);
+}
+.ai-draft-body {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 8px 0;
+}
+.ai-draft-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+}
+.ai-draft-actions .btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.ai-draft-actions .btn:first-child { flex: 0 0 auto; padding: 6px 9px; }
+.ai-draft-actions .btn svg { width: 11px; height: 11px; }
+.ai-draft-pending {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(153,153,153,0.08);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-draft-card.stale {
+  background: rgba(217, 119, 6, 0.06);
+  border-color: var(--amber, #D97706);
+  box-shadow: none;
+}
+.ai-draft-card.stale .ai-draft-title { color: #D97706; }
+.ai-draft-card.responded {
+  background: rgba(153,153,153,0.05);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.ai-draft-card.responded .ai-draft-title { color: var(--text-2); }
+.ai-draft-card.responded .ai-draft-body { color: var(--text-2); }
+.ai-draft-pending-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn:hover { border-color: var(--green); color: var(--green); }
+.btn:active { transform: scale(0.98); }
+.btn-primary {
+  background: var(--surface);
+  color: var(--green);
+  border-color: var(--green);
+}
+.btn-primary:hover { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.btn-warn {
+  background: var(--surface);
+  color: #D97706;
+  border-color: #FFC300;
+}
+.btn-warn:hover { background: var(--amber-bg); border-color: #D97706; color: #D97706; }
+.btn-fixed { flex: 0 0 auto; padding: 10px 16px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.input-row { display: flex; gap: 8px; }
+.input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: all 0.15s;
+}
+.input::placeholder { color: var(--text-4); }
+.input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-glow); }
+.search-input-wrap { flex: 1; position: relative; }
+.search-icon {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.search-icon:hover { color: var(--green); background: var(--green-bg); }
+.search-icon:active { transform: translateY(-50%) scale(0.92); }
+.search-input { padding-right: 38px; width: 100%; box-sizing: border-box; }
+.search-input-wrap:focus-within .search-icon { color: var(--green); }
+
+/* AI 生成 */
+.textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  min-height: 56px;
+  transition: all 0.15s;
+}
+.textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-glow); }
+.textarea::placeholder { color: var(--text-4); }
+.ai-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-actions .spacer { flex: 1; }
+.ai-meta { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+.ai-len-switch {
+  display: inline-flex;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.ai-len-btn {
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.ai-len-btn:not(:last-child) { border-right: 1.5px solid var(--border); }
+.ai-len-btn:hover { background: var(--green-bg); }
+.ai-len-btn.active {
+  background: var(--green);
+  color: white;
+}
+.ai-output {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--green-bg);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 24px;
+}
+.ai-output.streaming::after {
+  content: '▍';
+  display: inline-block;
+  margin-left: 1px;
+  animation: blink 0.9s steps(2) infinite;
+  color: var(--green);
+}
+@keyframes blink { 50% { opacity: 0; } }
+.ai-output.error {
+  background: rgba(250,81,81,0.06);
+  border-left-color: var(--red);
+  color: var(--red);
+}
+.ai-output-modal {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.ai-modal-foot {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.btn-block { width: 100%; justify-content: center; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.candidate {
+  padding: 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  transition: all 0.15s;
+}
+.candidate:hover { border-color: var(--green); box-shadow: 0 4px 12px var(--green-glow); }
+.candidate:last-child { margin-bottom: 0; }
+.candidate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.badge-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.badge-high { background: var(--green-bg); color: var(--green); }
+.badge-mid { background: var(--amber-bg); color: #D97706; }
+.badge-low { background: rgba(153,153,153,0.1); color: var(--text-3); }
+.candidate-cat {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.candidate-content {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.65;
+  font-weight: 400;
+}
+.candidate-content .truncated { display: block; }
+.candidate-content .full { display: none; }
+.candidate-content.expanded .truncated { display: none; }
+.candidate-content.expanded .full { display: block; }
+.expand-link {
+  display: inline-block;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 6px;
+  user-select: none;
+}
+.expand-link:hover { color: var(--green-dark); }
+.candidate-actions { margin-top: 12px; display: flex; gap: 8px; }
+
+/* 附件缩略图 */
+.candidate-attachments {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.att-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f5f5f5;
+  border: 1.5px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+}
+.att-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.att-video, .att-img-btn {
+  /* 重置 button 默认 */
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  display: block;
+}
+.att-video:disabled, .att-img-btn:disabled { cursor: not-allowed; opacity: 0.7; }
+.att-img-btn img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.att-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.att-video-mask {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px;
+  background: rgba(0,0,0,0.42);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+  text-align: center;
+  padding: 0 4px;
+}
+.att-video:hover .att-video-mask { background: rgba(7,193,96,0.55); }
+
+/* 低相关 (<0.8) 整体灰显,但仍可点击插入 */
+.candidate.dim {
+  border-color: #ececec;
+  background: #fafafa;
+}
+.candidate.dim:hover {
+  border-color: #d8d8d8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.candidate.dim .candidate-content { color: var(--text-3); }
+.candidate.dim .candidate-cat { color: #b8b8b8; }
+.candidate.dim .expand-link { color: var(--text-3); }
+.candidate.dim .expand-link:hover { color: var(--text-2); }
+.candidate.dim .btn-primary {
+  border-color: #ddd;
+  color: var(--text-3);
+  background: transparent;
+}
+.candidate.dim .btn-primary:hover {
+  border-color: #bbb;
+  color: var(--text-2);
+  background: #f3f3f3;
+}
+.candidate.dim .btn-primary svg { opacity: 0.55; }
+
+.empty-state {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+}
+.empty-state-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+.loading {
+  text-align: center;
+  padding: 18px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 12px; height: 12px;
+  margin-left: 6px;
+  border: 2px solid var(--green-bg2);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17,17,17,0.92);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 92vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17,17,17,0.42);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.22s ease-out, visibility 0.22s ease-out;
+}
+.modal-overlay.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.modal-card {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 310px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.96) translateY(4px);
+  transition: transform 0.22s ease-out;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.18);
+}
+.modal-overlay.show .modal-card { transform: scale(1) translateY(0); }
+.modal-header {
+  display: flex;
+  align-items: center;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-3);
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-family: inherit;
+  line-height: 1;
+  transition: all 0.12s;
+}
+.modal-close:hover { color: var(--text); background: var(--bg); }
+.modal-title-wrap { flex: 1; min-width: 0; }
+.modal-title { font-size: 13px; font-weight: 800; line-height: 1.2; }
+.modal-subtitle {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-body { padding: 10px 12px; overflow-y: auto; flex: 1; }
+.modal-body .candidate { padding: 10px; margin-bottom: 8px; border-radius: 10px; }
+.modal-body .candidate-head { margin-bottom: 7px; }
+.modal-body .candidate-content { font-size: 12px; line-height: 1.55; }
+.modal-body .badge { font-size: 9px; padding: 2px 7px; }
+.modal-body .candidate-cat { font-size: 10px; }
+.modal-body .candidate-actions { margin-top: 8px; }
+.modal-body .btn { padding: 7px 10px; font-size: 12px; }
+.modal-body .expand-link { font-size: 10px; margin-top: 4px; }
+.modal-body .candidate:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<nav class="topbar" style="display:none;">
+  <div class="tb-left">
+    <div class="tb-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11.25 14 15 10"/></svg>
+    </div>
+    <div class="tb-titles">
+      <div class="tb-title">AI 班主任助手</div>
+      <div class="tb-sub" id="tb-sub">初始化中…</div>
+    </div>
+  </div>
+  <div class="tb-user warn" id="tb-user-tag" style="display: none;">
+    <span class="tb-user-dot"></span>
+    <span id="tb-user-text">未登录</span>
+  </div>
+</nav>
+
+<div class="section">
+  <div class="section-title">
+    <div class="section-title-left">
+      <span id="customer-section-title">客户对话</span>
+      <span class="customer-meta" id="customer-meta"></span>
+    </div>
+    <span class="round-nav-wrap" id="round-nav-wrap" style="display:none;">
+      <button class="round-nav" id="round-prev" title="上一轮(更早)">←</button>
+      <span class="round-label" id="round-label">最新</span>
+      <button class="round-nav" id="round-next" title="下一轮(更近)">→</button>
+    </span>
+  </div>
+  <div class="customer-msg empty" id="customer-msg">尚未识别客户(等 JS-SDK 初始化…)</div>
+  <div class="msg-list" id="msg-list" style="display: none;"></div>
+  <div class="ai-draft-card" id="ai-draft-card" style="display: none;">
+    <div class="ai-draft-head">
+      <span class="ai-draft-title">🪄 AI 推荐回答</span>
+      <span class="ai-draft-meta" id="ai-draft-meta"></span>
+    </div>
+    <div class="ai-draft-body" id="ai-draft-body"></div>
+    <div class="ai-draft-actions">
+      <button class="btn" id="btn-ai-draft-regen" title="重新生成">↻</button>
+      <button class="btn btn-primary" id="btn-ai-draft-adopt">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+        采用
+      </button>
+    </div>
+  </div>
+  <div class="ai-draft-pending" id="ai-draft-pending" style="display: none;">
+    <span class="ai-draft-pending-spinner"></span>
+    AI 正在准备推荐答案…
+  </div>
+  <div class="actions" id="customer-actions" style="display: none;"></div>
+</div>
+
+<div class="section">
+  <div class="section-title">🪄 AI 生成</div>
+  <textarea class="textarea ai-query" id="ai-query" rows="2" placeholder="AI 帮你生成问题答案"></textarea>
+  <div class="ai-actions">
+    <div class="ai-len-switch" id="ai-len-switch">
+      <button type="button" class="ai-len-btn" data-len="100">100 字</button>
+      <button type="button" class="ai-len-btn" data-len="200">200 字</button>
+      <button type="button" class="ai-len-btn" data-len="300">300 字</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="ai-meta">点字数即生成</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 候选话术弹窗 -->
+<div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <button class="modal-close" id="modal-close" title="关闭(Esc)">✕</button>
+      <div class="modal-title-wrap">
+        <div class="modal-title">候选话术</div>
+        <div class="modal-subtitle" id="modal-subtitle">检索中…</div>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <div class="loading">检索中</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ai-modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <button class="modal-close" id="ai-modal-close" title="关闭(Esc)">✕</button>
+      <div class="modal-title-wrap">
+        <div class="modal-title">🪄 AI 生成</div>
+        <div class="modal-subtitle" id="ai-modal-subtitle">生成中…</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="ai-output ai-output-modal streaming" id="ai-modal-output">思考中…</div>
+    </div>
+    <div class="ai-modal-foot">
+      <button class="btn btn-primary btn-block" id="btn-ai-modal-insert" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+        一键插入
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+const params = new URLSearchParams(window.location.search);
+
+// 多源识别身份(优先级递增, 后赋值覆盖前)
+let externalUserid = '';
+let userId = '';
+let currentCustomerText = '';
+
+// URL 参数 (浏览器测试时手动带)
+const pe = params.get('external_userid');
+const pu = params.get('user_id');
+if (pe && !pe.startsWith('$')) externalUserid = pe;
+if (pu && !pu.startsWith('$')) userId = pu;
+
+// ========== UI helpers ==========
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function showToast(msg, ms = 2400) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+function tsToTimeAgo(ts) {
+  const sec = Math.max(0, Math.floor(Date.now()/1000 - ts));
+  if (sec < 60) return sec + ' 秒前';
+  if (sec < 3600) return Math.floor(sec/60) + ' 分钟前';
+  if (sec < 86400) return Math.floor(sec/3600) + ' 小时前';
+  return Math.floor(sec/86400) + ' 天前';
+}
+function setStatus(msg) { document.getElementById('tb-sub').textContent = msg; }
+function updateUserBadge() {
+  const tag = document.getElementById('tb-user-tag');
+  const text = document.getElementById('tb-user-text');
+  if (userId) {
+    tag.classList.remove('warn');
+    tag.style.display = '';
+    text.textContent = userId;
+    document.getElementById('tb-sub').textContent = `客服 · ${userId}`;
+  } else {
+    tag.style.display = 'none';
+  }
+}
+function updateCustomerTail() {
+  // 客户 ID 尾号已不在 UI 显示,空函数保留作为切换客户的占位
+}
+
+// ========== OAuth: 拿真实客服身份 ==========
+const CORPID = 'wwab1dc17860797922';
+const AGENTID = '1000003';
+
+async function tryOAuth() {
+  const code = params.get('code');
+
+  // 1. URL 带 code (OAuth 回跳),换 JWT
+  if (code) {
+    try {
+      const r = await fetch(`${API_BASE}/api/auth/oauth_callback`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code}),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        userId = data.user_id;
+        try { localStorage.setItem('kefu_jwt', data.jwt); } catch (_) {}
+      }
+    } catch (e) { console.warn('OAuth 换 JWT 失败', e); }
+    // 不论成败,清掉 URL 上的 code(避免刷新重复换)
+    try {
+      history.replaceState(null, '', location.pathname + location.hash);
+    } catch (_) {}
+    return;
+  }
+
+  // 2. 看 localStorage 缓存的 JWT
+  let cachedJwt = '';
+  try { cachedJwt = localStorage.getItem('kefu_jwt') || ''; } catch (_) {}
+  if (cachedJwt) {
+    try {
+      const r = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: {'Authorization': `Bearer ${cachedJwt}`},
+      });
+      if (r.ok) {
+        const data = await r.json();
+        userId = data.user_id;
+        return;
+      }
+      try { localStorage.removeItem('kefu_jwt'); } catch (_) {}
+    } catch (_) {}
+  }
+
+  // 3. 没 code 没 JWT → 主动跳转 OAuth
+  // ⚠️ 只在企微容器内才跳 (浏览器中跳会被企微 OAuth 页挡住"需在企微内打开")
+  const isWxworkUA = /wxwork|micromessenger/i.test(navigator.userAgent);
+  if (!isWxworkUA) {
+    console.log('[sidebar] 非企微环境, 跳过 OAuth 跳转');
+    return;
+  }
+  // sessionStorage 防死循环
+  let attempted = '';
+  try { attempted = sessionStorage.getItem('oauth_attempted') || ''; } catch (_) {}
+  if (attempted) return;
+  try { sessionStorage.setItem('oauth_attempted', '1'); } catch (_) {}
+
+  const redirectUri = location.href.split('?')[0].split('#')[0];
+  const oauthUrl =
+    `https://open.weixin.qq.com/connect/oauth2/authorize?` +
+    `appid=${CORPID}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code&scope=snsapi_base` +
+    `&agentid=${AGENTID}` +
+    `&state=sidebar#wechat_redirect`;
+  window.location.href = oauthUrl;
+  // 跳走前阻塞后续代码不重要
+  await new Promise(() => {});
+}
+
+// ========== 企微 JS-SDK 初始化 ==========
+async function initWxSDK() {
+  if (!window.wx) throw new Error('wx 未加载');
+
+  const url = location.href.split('#')[0];
+
+  // wx.config (企业级)
+  const corpResp = await fetch(`${API_BASE}/api/auth/jsapi_signature?url=${encodeURIComponent(url)}`);
+  if (!corpResp.ok) throw new Error('corp 签名 HTTP ' + corpResp.status);
+  const corpSig = await corpResp.json();
+
+  await new Promise((resolve, reject) => {
+    wx.config({
+      beta: true,
+      debug: false,
+      appId: corpSig.appId,
+      timestamp: corpSig.timestamp,
+      nonceStr: corpSig.nonceStr,
+      signature: corpSig.signature,
+      jsApiList: ['agentConfig'],
+    });
+    wx.ready(resolve);
+    wx.error(err => reject(new Error('wx.config: ' + JSON.stringify(err))));
+  });
+
+  // wx.agentConfig (应用级)
+  const agentResp = await fetch(`${API_BASE}/api/auth/jsapi_signature_agent?url=${encodeURIComponent(url)}`);
+  if (!agentResp.ok) throw new Error('agent 签名 HTTP ' + agentResp.status);
+  const agentSig = await agentResp.json();
+
+  await new Promise((resolve, reject) => {
+    wx.agentConfig({
+      corpid: agentSig.corpid,
+      agentid: agentSig.agentid,
+      timestamp: agentSig.timestamp,
+      nonceStr: agentSig.nonceStr,
+      signature: agentSig.signature,
+      jsApiList: ['getCurExternalContact', 'sendChatMessage'],
+      success: resolve,
+      fail: err => reject(new Error('wx.agentConfig: ' + JSON.stringify(err))),
+    });
+  });
+}
+
+async function getCurExternalContact() {
+  return new Promise((resolve, reject) => {
+    wx.invoke('getCurExternalContact', {}, res => {
+      if (res.err_msg === 'getCurExternalContact:ok') resolve(res.userId);
+      else reject(new Error(res.err_msg));
+    });
+  });
+}
+
+// ========== 客户对话(按轮次) ==========
+let rounds = [];
+let currentRoundIndex = 0;
+let lastNewestKey = '';
+
+function showRound(idx) {
+  if (!rounds.length) return;
+  if (idx < 0) idx = 0;
+  if (idx >= rounds.length) idx = rounds.length - 1;
+  currentRoundIndex = idx;
+  const round = rounds[idx];
+
+  const singleEl = document.getElementById('customer-msg');
+  const listEl = document.getElementById('msg-list');
+
+  // 隐藏单条版本,用列表展示每条 + 单独搜索按钮
+  singleEl.style.display = 'none';
+  listEl.style.display = '';
+
+  const searchIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+  listEl.innerHTML = round.messages.map(m => `
+    <div class="msg-row">
+      <div class="msg-text">${escapeHTML(m.text)}</div>
+      <button class="msg-search-btn" data-search="${escapeHTML(m.text)}" title="只检索这一句">
+        ${searchIcon}
+      </button>
+    </div>`).join('');
+
+  currentCustomerText = round.merged_text;
+
+  // meta 行: 条数 + 时间 + 已回复/待回复
+  const respondedHTML = round.responded
+    ? `<span class="responded-badge responded">✓ 已回复</span>`
+    : `<span class="responded-badge unresponded">⚠️ 待回复</span>`;
+  let timeHTML = `🕒 ${tsToTimeAgo(round.last_at)}`;
+  if (round.count > 1) {
+    timeHTML += ` · ${round.count} 条`;
+  }
+  document.getElementById('customer-meta').innerHTML =
+    `${respondedHTML} <span class="customer-meta-item" style="margin-left:6px;">${timeHTML}</span>`;
+  document.getElementById('customer-actions').style.display = 'flex';
+
+  // 轮次导航
+  const navWrap = document.getElementById('round-nav-wrap');
+  const label = document.getElementById('round-label');
+  const prevBtn = document.getElementById('round-prev');
+  const nextBtn = document.getElementById('round-next');
+  if (rounds.length > 1) {
+    navWrap.style.display = 'flex';
+    if (idx === 0) {
+      label.textContent = '最新轮次';
+      label.classList.toggle('unresponded', !round.responded);
+    } else {
+      label.textContent = `历史 -${idx}`;
+      label.classList.remove('unresponded');
+    }
+    prevBtn.disabled = (idx === rounds.length - 1);
+    nextBtn.disabled = (idx === 0);
+  } else {
+    navWrap.style.display = 'none';
+  }
+}
+
+async function loadConversation(silent = false) {
+  if (!externalUserid) return;
+  const el = document.getElementById('customer-msg');
+  if (!silent && !rounds.length) {
+    el.textContent = '加载中…';
+    el.style.display = '';
+    document.getElementById('msg-list').style.display = 'none';
+  }
+  try {
+    let url = `${API_BASE}/api/customer/${encodeURIComponent(externalUserid)}/conversation`;
+    if (userId) url += `?to_user=${encodeURIComponent(userId)}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const newRounds = data.rounds || [];
+
+    if (!newRounds.length) {
+      if (!silent) {
+        el.textContent = '该客户尚无消息(可能未同意会话存档,或刚开始对话)';
+        el.classList.add('empty');
+        el.style.display = '';
+        document.getElementById('msg-list').style.display = 'none';
+        document.getElementById('customer-meta').innerHTML = '';
+        document.getElementById('customer-actions').style.display = 'none';
+        document.getElementById('round-nav-wrap').style.display = 'none';
+      }
+      return;
+    }
+
+    // 用最新轮次的 key 检测是否真的有变化(无变化就跳过 UI 更新)
+    const newest = newRounds[0];
+    const key = `${newest.first_seq}-${newest.last_seq}-${newest.responded}-${newRounds.length}`;
+    if (silent && key === lastNewestKey) {
+      // round 没变,但 ai_draft 可能后台刚生成出来 → 刷一下卡片(开销极小)
+      renderAiDraftCard(data.ai_draft, newRounds[0]);
+      return;
+    }
+    lastNewestKey = key;
+
+    rounds = newRounds;
+    if (currentRoundIndex >= rounds.length) currentRoundIndex = 0;
+    showRound(currentRoundIndex);
+    // 渲染 AI 推荐草稿(只在显示最新轮 & 草稿对应 last_seq 时显示)
+    renderAiDraftCard(data.ai_draft, newRounds[0]);
+  } catch (e) {
+    if (!silent) {
+      el.textContent = '拉取失败: ' + e.message;
+      el.classList.add('empty');
+    }
+  }
+}
+
+// ========== AI 推荐草稿卡片(自动后台预生成的草稿) ==========
+let _currentDraftAnswer = '';
+function renderAiDraftCard(draft, latestRound) {
+  const card = document.getElementById('ai-draft-card');
+  const pending = document.getElementById('ai-draft-pending');
+  const adoptBtn = document.getElementById('btn-ai-draft-adopt');
+  if (!latestRound) {
+    card.style.display = 'none';
+    pending.style.display = 'none';
+    _currentDraftAnswer = '';
+    return;
+  }
+  const responded = !!latestRound.responded;
+  // 已回复 + 没草稿 → 隐藏
+  if (responded && (!draft || !draft.answer)) {
+    card.style.display = 'none';
+    pending.style.display = 'none';
+    _currentDraftAnswer = '';
+    return;
+  }
+  if (draft && draft.answer) {
+    _currentDraftAnswer = draft.answer;
+    const stale = draft.stale === true;
+    let metaText = `已生成 · ${tsAgoForDraft(draft.updated_at)} · ${draft.answer.length} 字`;
+    if (responded) metaText = '✅ 本轮已回复 · ' + metaText;
+    else if (stale) metaText = '⚠️ 基于较早消息 · ' + metaText + ' · 建议点 ↻ 重新生成';
+    document.getElementById('ai-draft-body').textContent = draft.answer;
+    document.getElementById('ai-draft-meta').textContent = metaText;
+    card.classList.toggle('stale', stale && !responded);
+    card.classList.toggle('responded', responded);
+    card.style.display = '';
+    pending.style.display = (stale && !responded) ? '' : 'none';
+    adoptBtn.disabled = responded;
+    adoptBtn.title = responded ? '本轮已发出回复' : '采用并塞入企微输入框';
+  } else {
+    _currentDraftAnswer = '';
+    card.style.display = 'none';
+    pending.style.display = '';
+    adoptBtn.disabled = false;
+  }
+}
+function tsAgoForDraft(ts) {
+  if (!ts) return '';
+  const sec = Math.max(0, Math.floor(Date.now() / 1000 - Number(ts)));
+  if (sec < 60) return sec + ' 秒前';
+  if (sec < 3600) return Math.floor(sec / 60) + ' 分前';
+  return Math.floor(sec / 3600) + ' 小时前';
+}
+
+function _logEvent(type, data) {
+  try {
+    fetch(`${API_BASE}/api/events/log`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        event_type: type,
+        customer_id: externalUserid || '',
+        staff_id: userId || '',
+        data: data || {},
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+document.getElementById('btn-ai-draft-adopt').addEventListener('click', () => {
+  if (!_currentDraftAnswer) { showToast('还没有可用草稿'); return; }
+  if (typeof wx === 'undefined' || !wx.invoke) {
+    try { navigator.clipboard.writeText(_currentDraftAnswer); showToast('已复制(浏览器环境)'); } catch(_){}
+    return;
+  }
+  const btn = document.getElementById('btn-ai-draft-adopt');
+  btn.disabled = true;
+  // 埋点: 采用动作 (存完整 answer 用于后续精确比对"一字不差采用")
+  _logEvent('draft_adopt', {
+    answer: _currentDraftAnswer,
+    answer_length: _currentDraftAnswer.length,
+    last_seq: (rounds[0] && rounds[0].last_seq) || 0,
+  });
+  wx.invoke('sendChatMessage', {
+    msgtype: 'text',
+    enterChat: true,
+    text: { content: _currentDraftAnswer },
+  }, (res) => {
+    btn.disabled = false;
+    if (res.err_msg === 'sendChatMessage:ok') {
+      showToast('✅ 已塞入,回车发送');
+    } else {
+      showToast('❌ 失败: ' + (res.err_msg || '未知'));
+    }
+  });
+});
+
+// 重新生成 = 调用现有 AI 生成接口,用最新一轮 query
+document.getElementById('btn-ai-draft-regen').addEventListener('click', async () => {
+  if (!externalUserid || !rounds.length) return;
+  const latest = rounds[0];
+  const query = latest.merged_text || '';
+  if (!query) return;
+  // 埋点: 重新生成
+  _logEvent('draft_regen', {
+    query_length: query.length,
+    last_seq: latest.last_seq || 0,
+    old_answer_length: (_currentDraftAnswer || '').length,
+  });
+  const card = document.getElementById('ai-draft-card');
+  const pending = document.getElementById('ai-draft-pending');
+  card.style.display = 'none';
+  pending.style.display = '';
+  try {
+    const r = await fetch(`${API_BASE}/api/ai/generate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        customer_id: externalUserid,
+        query,
+        max_chars: 100,
+        last_seq: latest.last_seq || 0,
+      }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '', full = '', firstShown = false;
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, idx); buffer = buffer.slice(idx + 2);
+        for (const line of block.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          let evt; try { evt = JSON.parse(line.slice(5).trim()); } catch(_) { continue; }
+          if (evt.type === 'delta') {
+            if (!firstShown) { card.style.display = ''; pending.style.display = 'none'; firstShown = true; }
+            full += evt.content;
+            document.getElementById('ai-draft-body').textContent = full;
+          } else if (evt.type === 'done') {
+            full = evt.content || full;
+            _currentDraftAnswer = full;
+            document.getElementById('ai-draft-body').textContent = full;
+            document.getElementById('ai-draft-meta').textContent = `刚刚重新生成 · ${full.length} 字`;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    pending.style.display = 'none';
+    showToast('重新生成失败: ' + e.message);
+  }
+});
+
+// 兼容名(供 init 用)
+const loadLatestMessage = loadConversation;
+
+// ========== 检索 + 弹窗 ==========
+function openModal(queryText) {
+  document.getElementById('modal-subtitle').textContent =
+    '检索: ' + (queryText.length > 60 ? queryText.slice(0, 60) + '…' : queryText);
+  document.getElementById('modal-body').innerHTML = '<div class="loading">检索中</div>';
+  document.getElementById('modal-overlay').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+async function retrieve(text) {
+  if (!text || !text.trim()) { showToast('请先输入问题'); return; }
+  openModal(text);
+  try {
+    const r = await fetch(`${API_BASE}/api/retrieve`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text}),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    renderCandidates(data.candidates || [], data.is_mock);
+  } catch (e) {
+    document.getElementById('modal-body').innerHTML =
+      `<div class="empty-state">检索失败: ${escapeHTML(e.message)}</div>`;
+  }
+}
+
+function renderCandidates(candidates, isMock) {
+  const body = document.getElementById('modal-body');
+  if (!candidates.length) {
+    body.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div>无相关历史话术</div>`;
+    return;
+  }
+  const sub = document.getElementById('modal-subtitle');
+  sub.textContent = sub.textContent + ` · ${candidates.length} 条${isMock ? ' (Mock)' : ''}`;
+  body.innerHTML = candidates.map((c) => {
+    const sim = Number(c.similarity || 0);
+    const isHigh = sim >= 0.80;
+    const badgeClass = isHigh ? 'badge-high' : 'badge-low';
+    const simLabel = isHigh ? '高度匹配' : '低相关';
+    const dimClass = isHigh ? '' : 'dim';
+    const ans = String(c.answer || '');
+    const truncated = ans.length > 80 ? ans.slice(0, 80) + '…' : ans;
+    const showExpand = ans.length > 80;
+    const atts = c.attachments || [];
+    const images = atts.filter(a => a.kind === 'image');
+    const videos = atts.filter(a => a.kind === 'video');
+    // 所有附件统一走 mediaId 路径(图/视频都是缩略图 button 一键发,文字独立按钮)
+    const sendLabel = '一键插入';
+    const firstImageId = '';
+    const attachmentsHTML = atts.length ? `
+      <div class="candidate-attachments">
+        ${images.map((a, i) => {
+          const label = images.length > 1 ? `发图 ${i + 1}` : '发图';
+          return `
+            <button type="button" class="att-thumb att-img-btn"
+                    data-action="send-image"
+                    data-image-id="${a.id}"
+                    title="一键发图: ${escapeHTML(a.name || '')}">
+              <img src="${API_BASE}/api/attachments/${a.id}/file" alt="">
+              <div class="att-video-mask">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+                <span>${label}</span>
+              </div>
+            </button>
+          `;
+        }).join('')}
+        ${videos.map(a => `
+          <button type="button" class="att-thumb att-video"
+                  data-action="send-video"
+                  data-video-id="${a.id}"
+                  title="一键发视频: ${escapeHTML(a.name || '')}">
+            <video src="${API_BASE}/api/attachments/${a.id}/file#t=0.5" preload="metadata" muted></video>
+            <div class="att-video-mask">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="6,4 22,12 6,20"/></svg>
+              <span>一键发视频</span>
+            </div>
+          </button>
+        `).join('')}
+      </div>` : '';
+    return `
+    <div class="candidate ${dimClass}">
+      <div class="candidate-head">
+        <span class="badge ${badgeClass}"><span class="badge-dot"></span>${escapeHTML(simLabel)} · ${sim.toFixed(2)}</span>
+        <span class="candidate-cat">${escapeHTML(c.category || '')}</span>
+      </div>
+      <div class="candidate-content" data-full="${escapeHTML(ans)}">
+        <span class="truncated">${escapeHTML(truncated)}</span>
+        <span class="full">${escapeHTML(ans)}</span>
+      </div>
+      ${showExpand ? `<span class="expand-link" data-action="expand">展开 ↓</span>` : ''}
+      ${attachmentsHTML}
+      <div class="candidate-actions">
+        <button class="btn btn-primary" data-action="send" title="塞到企微输入框,你检查后按回车发送">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+          ${sendLabel}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// modal 内事件委托
+document.getElementById('modal-body').addEventListener('click', async (e) => {
+  const target = e.target.closest('[data-action]');
+  if (!target) return;
+  const card = target.closest('.candidate');
+  if (!card) return;
+  const action = target.dataset.action;
+  const content = card.querySelector('.candidate-content');
+  if (action === 'expand') {
+    const expanded = content.classList.toggle('expanded');
+    target.textContent = expanded ? '收起 ↑' : '展开 ↓';
+  } else if (action === 'send-video' || action === 'send-image') {
+    if (typeof wx === 'undefined' || !wx.invoke) {
+      showToast('❌ 仅企微内可用'); return;
+    }
+    const isVideo = action === 'send-video';
+    const attId = isVideo ? target.dataset.videoId : target.dataset.imageId;
+    const mask = target.querySelector('.att-video-mask span');
+    const oldText = mask ? mask.textContent : '';
+    target.disabled = true;
+    if (mask) mask.textContent = '上传企微…';
+    try {
+      const r = await fetch(`${API_BASE}/api/attachments/${attId}/wxwork_media_id`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+      if (mask) mask.textContent = '塞输入框…';
+      const payload = isVideo
+        ? { msgtype: 'video', enterChat: true, video: { mediaid: d.media_id } }
+        : { msgtype: 'image', enterChat: true, image: { mediaid: d.media_id } };
+      wx.invoke('sendChatMessage', payload, (res) => {
+        target.disabled = false;
+        if (mask) mask.textContent = oldText;
+        if (res.err_msg === 'sendChatMessage:ok') {
+          showToast(`✅ ${isVideo ? '视频' : '图片'}已塞入,回车发送`);
+        } else {
+          showToast('❌ 企微拒绝: ' + (res.err_msg || '未知'));
+        }
+      });
+    } catch (err) {
+      target.disabled = false;
+      if (mask) mask.textContent = oldText;
+      showToast('❌ ' + (err.message || err));
+    }
+  } else if (action === 'copy') {
+    const text = content.dataset.full || '';
+    try {
+      await navigator.clipboard.writeText(text);
+      closeModal();
+    } catch (err) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); closeModal(); }
+      catch (e2) { showToast('❌ 复制失败,请手动选中'); }
+      document.body.removeChild(ta);
+    }
+  } else if (action === 'send') {
+    const text = content.dataset.full || '';
+    if (typeof wx === 'undefined' || !wx.invoke) {
+      showToast('❌ 仅在企微内可用直接发送');
+      return;
+    }
+    target.disabled = true;
+    target.textContent = '发送中…';
+    wx.invoke('sendChatMessage', {
+      msgtype: 'text',
+      enterChat: true,
+      text: { content: text },
+    }, (res) => {
+      if (res.err_msg === 'sendChatMessage:ok') {
+        showToast('✅ 文字已塞入,回车发送');
+      } else {
+        showToast('❌ 插入失败: ' + (res.err_msg || '未知'));
+      }
+      target.disabled = false;
+      target.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg> 一键插入`;
+    });
+  }
+});
+
+// 关闭弹窗 - 4 种方式 (✕按钮 / 点 overlay / Esc / 复制后自动关上面已实现)
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'modal-overlay') closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('modal-overlay').classList.contains('show')) {
+    closeModal();
+  }
+});
+
+document.getElementById('round-prev').addEventListener('click', () => {
+  if (currentRoundIndex < rounds.length - 1) showRound(currentRoundIndex + 1);
+});
+document.getElementById('round-next').addEventListener('click', () => {
+  if (currentRoundIndex > 0) showRound(currentRoundIndex - 1);
+});
+// 单条搜索 (事件委托)
+document.getElementById('msg-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.msg-search-btn');
+  if (btn) retrieve(btn.dataset.search || '');
+});
+
+// ========== AI 生成 ==========
+let aiCurrentAnswer = '';
+let aiStreamingController = null;
+
+const aiQueryEl = () => document.getElementById('ai-query');
+const aiModalOverlay = () => document.getElementById('ai-modal-overlay');
+const aiModalOutput = () => document.getElementById('ai-modal-output');
+const aiModalSubtitle = () => document.getElementById('ai-modal-subtitle');
+const aiInsertBtn = () => document.getElementById('btn-ai-modal-insert');
+
+function openAiModal(maxChars) {
+  aiModalSubtitle().textContent = `限 ${maxChars} 字 · 思考中…`;
+  aiModalOutput().textContent = '思考中…';
+  aiModalOutput().classList.add('streaming');
+  aiModalOutput().classList.remove('error');
+  aiInsertBtn().disabled = true;
+  aiModalOverlay().classList.add('show');
+}
+function closeAiModal() {
+  aiModalOverlay().classList.remove('show');
+  if (aiStreamingController) {
+    aiStreamingController.abort();
+    aiStreamingController = null;
+  }
+}
+
+async function aiGenerate(maxChars) {
+  const query = (aiQueryEl().value || '').trim();
+  if (!query) { showToast('请先填问题'); return; }
+  if (!externalUserid) { showToast('未识别客户,无法生成'); return; }
+  if (aiStreamingController) aiStreamingController.abort();
+  aiStreamingController = new AbortController();
+  aiCurrentAnswer = '';
+  openAiModal(maxChars);
+  const tStart = Date.now();
+  try {
+    const r = await fetch(`${API_BASE}/api/ai/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_id: externalUserid, query, max_chars: maxChars }),
+      signal: aiStreamingController.signal,
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let firstDelta = false;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of block.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          let evt;
+          try { evt = JSON.parse(payload); } catch (_) { continue; }
+          if (evt.type === 'delta') {
+            if (!firstDelta) { aiModalOutput().textContent = ''; firstDelta = true; }
+            aiCurrentAnswer += evt.content;
+            aiModalOutput().textContent = aiCurrentAnswer;
+          } else if (evt.type === 'done') {
+            aiCurrentAnswer = evt.content || aiCurrentAnswer;
+            aiModalOutput().textContent = aiCurrentAnswer;
+            aiModalOutput().classList.remove('streaming');
+            const sec = ((Date.now() - tStart) / 1000).toFixed(1);
+            aiModalSubtitle().textContent = `限 ${maxChars} 字 · 已生成 ${sec}s · 实际 ${aiCurrentAnswer.length} 字`;
+            aiInsertBtn().disabled = false;
+          } else if (evt.type === 'error') {
+            aiModalOutput().textContent = '❌ ' + (evt.message || '生成失败');
+            aiModalOutput().classList.add('error');
+            aiModalOutput().classList.remove('streaming');
+            aiModalSubtitle().textContent = '生成失败';
+          }
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    aiModalOutput().textContent = '❌ ' + e.message;
+    aiModalOutput().classList.add('error');
+    aiModalOutput().classList.remove('streaming');
+    aiModalSubtitle().textContent = '生成失败';
+  } finally {
+    aiStreamingController = null;
+  }
+}
+
+function aiInsert() {
+  if (!aiCurrentAnswer) { showToast('还没生成内容'); return; }
+  if (typeof wx === 'undefined') {
+    try { navigator.clipboard.writeText(aiCurrentAnswer); showToast('已复制(浏览器环境)'); } catch(_){}
+    closeAiModal();
+    return;
+  }
+  const btn = aiInsertBtn();
+  btn.disabled = true;
+  wx.invoke('sendChatMessage', {
+    msgtype: 'text', enterChat: true, text: { content: aiCurrentAnswer },
+  }, (res) => {
+    if (res.err_msg === 'sendChatMessage:ok') {
+      closeAiModal();
+    } else {
+      btn.disabled = false;
+      showToast('❌ 插入失败: ' + (res.err_msg || '未知'));
+    }
+  });
+}
+
+// 切客户时清空状态(textarea 始终保持空,等用户主动输入)
+function aiResetForCustomer() {
+  aiCurrentAnswer = '';
+  aiQueryEl().value = '';
+}
+
+// 字数段位 click = 选中 + 直接触发生成 + 弹窗
+document.getElementById('ai-len-switch').addEventListener('click', (e) => {
+  const btn = e.target.closest('.ai-len-btn');
+  if (!btn) return;
+  document.querySelectorAll('.ai-len-btn').forEach(b => b.classList.toggle('active', b === btn));
+  aiGenerate(Number(btn.dataset.len));
+});
+
+// textarea 回车 = 100 字立即生成 (Shift+Enter 仍可换行;中文输入法 composing 时不触发)
+aiQueryEl().addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+  e.preventDefault();
+  document.querySelectorAll('.ai-len-btn').forEach(b => b.classList.toggle('active', b.dataset.len === '100'));
+  aiGenerate(100);
+});
+
+document.getElementById('btn-ai-modal-insert').addEventListener('click', aiInsert);
+document.getElementById('ai-modal-close').addEventListener('click', closeAiModal);
+document.getElementById('ai-modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'ai-modal-overlay') closeAiModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && aiModalOverlay().classList.contains('show')) closeAiModal();
+});
+
+// ========== 启动流程 ==========
+function dbg(msg) {
+  console.log('[sidebar]', msg);
+}
+
+(async function init() {
+  setStatus('初始化中…');
+  dbg('启动: wx=' + (typeof wx !== 'undefined' ? 'OK' : 'undefined'));
+
+  // 1. OAuth
+  await tryOAuth();
+  updateUserBadge();
+  updateCustomerTail();
+  dbg('OAuth 完成: userId=' + (userId || 'none'));
+
+  // 2. JS-SDK
+  // 客户端环境(用于区分 Mac vs Windows 排查)
+  const _ua = navigator.userAgent || '';
+  const _platform = /Windows/i.test(_ua) ? 'Windows' : (/Macintosh|Mac OS/i.test(_ua) ? 'Mac' : (/Mobile|iPhone|Android/i.test(_ua) ? 'Mobile' : 'Other'));
+  _logEvent('sidebar_open', { platform: _platform, ua: _ua.slice(0, 200), url: location.href });
+
+  if (typeof wx !== 'undefined') {
+    try {
+      setStatus('配置 wx.config…');
+      dbg('开始 wx.config');
+      const url = location.href.split('#')[0];
+      const corpResp = await fetch(`${API_BASE}/api/auth/jsapi_signature?url=${encodeURIComponent(url)}`);
+      if (!corpResp.ok) throw new Error('corp 签名 HTTP ' + corpResp.status);
+      const corpSig = await corpResp.json();
+      dbg('corp 签名拿到: appId=' + corpSig.appId);
+      await new Promise((resolve, reject) => {
+        wx.config({
+          beta: true, debug: false,
+          appId: corpSig.appId,
+          timestamp: corpSig.timestamp,
+          nonceStr: corpSig.nonceStr,
+          signature: corpSig.signature,
+          jsApiList: ['agentConfig'],
+        });
+        wx.ready(() => {
+          dbg('wx.ready ✓');
+          _logEvent('wx_config', { ok: true, platform: _platform });
+          resolve();
+        });
+        wx.error(err => {
+          _logEvent('wx_config', { ok: false, err: JSON.stringify(err), platform: _platform });
+          reject(new Error('wx.error: ' + JSON.stringify(err)));
+        });
+      });
+
+      setStatus('配置 wx.agentConfig…');
+      dbg('开始 wx.agentConfig');
+      const agentResp = await fetch(`${API_BASE}/api/auth/jsapi_signature_agent?url=${encodeURIComponent(url)}`);
+      const agentSig = await agentResp.json();
+      dbg('agent 签名拿到: agentid=' + agentSig.agentid);
+      await new Promise((resolve, reject) => {
+        wx.agentConfig({
+          corpid: agentSig.corpid,
+          agentid: agentSig.agentid,
+          timestamp: agentSig.timestamp,
+          nonceStr: agentSig.nonceStr,
+          signature: agentSig.signature,
+          jsApiList: ['getCurExternalContact', 'sendChatMessage'],
+          success: (r) => {
+            dbg('wx.agentConfig ✓');
+            _logEvent('wx_agentconfig', { ok: true, platform: _platform, msg: r && r.errMsg });
+            resolve();
+          },
+          fail: err => {
+            _logEvent('wx_agentconfig', { ok: false, err: JSON.stringify(err), platform: _platform });
+            reject(new Error('agentConfig.fail: ' + JSON.stringify(err)));
+          },
+        });
+      });
+
+      setStatus('调用 getCurExternalContact…');
+      dbg('调用 getCurExternalContact');
+      const realExternalUserid = await new Promise((resolve, reject) => {
+        wx.invoke('getCurExternalContact', {}, res => {
+          if (res.err_msg === 'getCurExternalContact:ok') resolve(res.userId);
+          else reject(new Error(res.err_msg));
+        });
+      });
+      dbg('拿到 external_userid: ' + (realExternalUserid || '空'));
+      if (realExternalUserid) {
+        externalUserid = realExternalUserid;
+        updateCustomerTail();
+      }
+    } catch (e) {
+      dbg('JS-SDK 失败: ' + e.message);
+    }
+  } else {
+    dbg('wx 未定义,跳过 JS-SDK');
+  }
+
+  // 3. 拉客户消息 + AI 草稿
+  if (externalUserid) {
+    setStatus(userId ? `客服 · ${userId}` : '已识别客户');
+    loadLatestMessage();
+  } else {
+    setStatus(userId ? `客服 · ${userId}` : '⚠️ 未识别身份');
+  }
+
+  // 4. 客户切换轮询 + 同一客户的新消息每 3 秒静默刷新
+  if (typeof wx !== 'undefined') {
+    let lastMsgRefresh = Date.now();
+    setInterval(async () => {
+      try {
+        const newId = await new Promise((resolve, reject) => {
+          wx.invoke('getCurExternalContact', {}, res => {
+            if (res.err_msg === 'getCurExternalContact:ok') resolve(res.userId);
+            else reject(new Error(res.err_msg));
+          });
+        });
+        if (newId && newId !== externalUserid) {
+          console.log('[sidebar] 客户切换', externalUserid, '→', newId);
+          externalUserid = newId;
+          currentCustomerText = '';
+          rounds = [];
+          currentRoundIndex = 0;
+          lastNewestKey = '';
+          if (aiStreamingController) aiStreamingController.abort();
+          aiResetForCustomer();
+          updateCustomerTail();
+          loadConversation();
+          lastMsgRefresh = Date.now();
+        } else if (Date.now() - lastMsgRefresh > 2000) {
+          // 同一客户每 3 秒静默刷新(seq/responded 不变就不抖动 UI)
+          loadConversation(true);
+          lastMsgRefresh = Date.now();
+        }
+      } catch (_) {}
+    }, 1000);
+  }
+})();
+</script>
+
+</body>
+</html>
