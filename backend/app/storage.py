@@ -126,7 +126,7 @@ class Storage:
                 llm_reason          TEXT,
                 source_seq          INTEGER,
                 customer_id         TEXT,
-                status              TEXT DEFAULT 'pending',  -- pending | adopted | ignored
+                status              TEXT DEFAULT 'pending',  -- pending | adopted | ignored | merged
                 reviewed_by         TEXT,
                 reviewed_at         REAL,
                 rag_entry_id        INTEGER,
@@ -134,6 +134,12 @@ class Storage:
                 created_at          REAL DEFAULT (strftime('%s','now'))
             );
             CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidate_phrases(status);
+
+            CREATE TABLE IF NOT EXISTS rag_answer_vectors (
+                entry_id     INTEGER PRIMARY KEY,
+                vector       BLOB NOT NULL,
+                embedded_at  REAL DEFAULT (strftime('%s','now'))
+            );
             """
         )
         # 老库兼容: 给 ai_drafts 加 last_seq 列(忽略已存在错误)
@@ -141,6 +147,15 @@ class Storage:
             self.conn.execute("ALTER TABLE ai_drafts ADD COLUMN last_seq INTEGER DEFAULT 0")
         except Exception:
             pass
+        # 老库兼容: candidate_phrases 加 2 列(忽略已存在错误)
+        for col_sql in (
+            "ALTER TABLE candidate_phrases ADD COLUMN suggested_merge_entry_id INTEGER",
+            "ALTER TABLE candidate_phrases ADD COLUMN answer_match_similarity  REAL",
+        ):
+            try:
+                self.conn.execute(col_sql)
+            except Exception:
+                pass
         self._seed_admins()
         self._seed_prompts()
 
