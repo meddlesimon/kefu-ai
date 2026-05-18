@@ -7,6 +7,8 @@ services:
       - "8098:8098"
     env_file:
       - ./backend/.env
+    environment:
+      - CANDIDATE_ANSWER_MATCH_THRESHOLD=0.88
     volumes:
       - ./backend/secrets:/app/secrets:ro
       - /data/kefu-ai:/app/data
