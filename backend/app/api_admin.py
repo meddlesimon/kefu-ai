@@ -520,7 +520,7 @@ async def rag_backfill_answer_vectors(admin: dict = Depends(get_admin)):
 
     embedded = 0
     errors = 0
-    BATCH = 25
+    BATCH = 10
     for i in range(0, len(rows), BATCH):
         batch = rows[i:i + BATCH]
         try:
@@ -556,7 +556,7 @@ async def candidates_rescan_pending(force: bool = False, admin: dict = Depends(g
     suggested = 0
     refreshed = 0
     errors = 0
-    BATCH = 25
+    BATCH = 10
     for i in range(0, len(rows), BATCH):
         batch = rows[i:i + BATCH]
         # 答案侧 embed: 需要的子集

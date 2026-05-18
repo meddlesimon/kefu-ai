@@ -14,7 +14,10 @@ class EmbedError(Exception):
 
 
 async def embed(texts: List[str]) -> List[List[float]]:
-    """批量 embed,返回向量列表。一次最多 25 条 (阿里限制)。"""
+    """批量 embed,返回向量列表。一次最多 10 条 (阿里 text-embedding-v4 限制,实测 2026-05)。
+
+    超过 10 条调用方需要自己分批。
+    """
     if not texts:
         return []
     if not settings.aliyun_api_key:
