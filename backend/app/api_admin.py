@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth.admin_auth import get_admin, hash_password
+from app.rag import answer_store
 from app.rag import embed as rag_embed
 from app.rag import expand as rag_expand
 from app.rag import parser as rag_parser
@@ -314,27 +315,55 @@ async def candidates_list(status: str = "pending", admin: dict = Depends(get_adm
     rows = storage.conn.execute(
         "SELECT id, parent_query, staff_reply, cleaned_reply, suggested_category, "
         "       suggested_variants, llm_score, llm_reason, source_seq, customer_id, "
-        "       status, reviewed_by, reviewed_at, rag_entry_id, created_at "
+        "       status, reviewed_by, reviewed_at, rag_entry_id, created_at, "
+        "       suggested_merge_entry_id, answer_match_similarity "
         "FROM candidate_phrases WHERE status = ? ORDER BY llm_score DESC, created_at DESC",
         (status,),
     ).fetchall()
-    return [{
-        "id": r[0],
-        "parent_query": r[1],
-        "staff_reply": r[2],
-        "cleaned_reply": r[3],
-        "suggested_category": r[4],
-        "suggested_variants": json.loads(r[5]) if r[5] else [],
-        "llm_score": r[6],
-        "llm_reason": r[7],
-        "source_seq": r[8],
-        "customer_id": r[9],
-        "status": r[10],
-        "reviewed_by": r[11],
-        "reviewed_at": r[12],
-        "rag_entry_id": r[13],
-        "created_at": r[14],
-    } for r in rows]
+
+    # 一次性查所有被建议合并的 entry,免得 N+1
+    entry_ids = {r[15] for r in rows if r[15]}
+    entry_map = {}
+    if entry_ids:
+        ph = ",".join("?" * len(entry_ids))
+        for eid, cat, ans in storage.conn.execute(
+            f"SELECT id, category, best_answer FROM rag_entries WHERE id IN ({ph})",
+            tuple(entry_ids),
+        ).fetchall():
+            preview = (ans or "")
+            if len(preview) > 80:
+                preview = preview[:80] + "…"
+            entry_map[eid] = {
+                "entry_id": eid,
+                "category": cat,
+                "best_answer_preview": preview,
+            }
+
+    out = []
+    for r in rows:
+        sug_merge = None
+        if r[15] and r[15] in entry_map:
+            sug_merge = dict(entry_map[r[15]])
+            sug_merge["similarity"] = r[16]
+        out.append({
+            "id": r[0],
+            "parent_query": r[1],
+            "staff_reply": r[2],
+            "cleaned_reply": r[3],
+            "suggested_category": r[4],
+            "suggested_variants": json.loads(r[5]) if r[5] else [],
+            "llm_score": r[6],
+            "llm_reason": r[7],
+            "source_seq": r[8],
+            "customer_id": r[9],
+            "status": r[10],
+            "reviewed_by": r[11],
+            "reviewed_at": r[12],
+            "rag_entry_id": r[13],
+            "created_at": r[14],
+            "suggested_merge": sug_merge,
+        })
+    return out
 
 
 class AdoptCandidateRequest(BaseModel):
@@ -389,6 +418,13 @@ async def candidates_adopt(cid: int, req: AdoptCandidateRequest, admin: dict = D
     vectors = await rag_embed.embed(uniq_vars)
     await rag_store.add_variants(entry_id, uniq_vars, vectors)
 
+    # 答案侧向量(答案去重用,失败不阻断 adopt)
+    try:
+        answer_vec = await rag_embed.embed_one(answer)
+        await answer_store.add_answer_vector(entry_id, answer_vec)
+    except Exception:
+        logger.exception("写答案向量失败 entry_id=%s (不阻断 adopt)", entry_id)
+
     # 标记候选为 adopted
     storage.conn.execute(
         "UPDATE candidate_phrases SET status='adopted', reviewed_by=?, reviewed_at=?, rag_entry_id=? WHERE id = ?",
@@ -409,6 +445,137 @@ async def candidates_ignore(cid: int, admin: dict = Depends(get_admin)):
         (admin["username"], _time.time(), cid),
     )
     return {"ignored": cid}
+
+
+class MergeCandidateRequest(BaseModel):
+    entry_id: int
+
+
+@router.post("/candidates/{cid}/merge")
+async def candidates_merge(cid: int, req: MergeCandidateRequest, admin: dict = Depends(get_admin)):
+    """把候选的 parent_query 作为新 variant 追加到已存在 entry,候选标记 merged。"""
+    import time as _time
+    storage = get_storage()
+    cand = storage.conn.execute(
+        "SELECT parent_query, status FROM candidate_phrases WHERE id = ?", (cid,)
+    ).fetchone()
+    if not cand:
+        raise HTTPException(404, "候选不存在")
+    parent_q, status = cand
+    if status != "pending":
+        raise HTTPException(400, f"候选已处理(status={status})")
+    if not parent_q or not parent_q.strip():
+        raise HTTPException(400, "parent_query 为空,无法作为 variant")
+
+    entry = storage.conn.execute(
+        "SELECT id FROM rag_entries WHERE id = ?", (req.entry_id,)
+    ).fetchone()
+    if not entry:
+        raise HTTPException(404, "目标 entry 不存在")
+
+    # 检查该 variant 文本是否已存在于该 entry
+    existed = storage.conn.execute(
+        "SELECT 1 FROM rag_variants WHERE entry_id = ? AND variant_text = ?",
+        (req.entry_id, parent_q.strip()),
+    ).fetchone()
+    if existed:
+        storage.conn.execute(
+            "UPDATE candidate_phrases SET status='merged', reviewed_by=?, reviewed_at=?, rag_entry_id=? "
+            "WHERE id = ?",
+            (admin["username"], _time.time(), req.entry_id, cid),
+        )
+        return {"merged_into": req.entry_id, "added_variants": 0, "note": "variant 已存在"}
+
+    try:
+        vec = await rag_embed.embed_one(parent_q.strip())
+    except Exception as e:
+        raise HTTPException(500, f"embedding 失败: {e}")
+    await rag_store.add_variants(req.entry_id, [parent_q.strip()], [vec])
+
+    storage.conn.execute(
+        "UPDATE candidate_phrases SET status='merged', reviewed_by=?, reviewed_at=?, rag_entry_id=? "
+        "WHERE id = ?",
+        (admin["username"], _time.time(), req.entry_id, cid),
+    )
+    return {"merged_into": req.entry_id, "added_variants": 1}
+
+
+@router.post("/rag/backfill-answer-vectors")
+async def rag_backfill_answer_vectors(admin: dict = Depends(get_admin)):
+    """一次性回填历史 rag_entries.best_answer 的 embedding 到 rag_answer_vectors。幂等。"""
+    storage = get_storage()
+    rows = storage.conn.execute(
+        "SELECT id, best_answer FROM rag_entries "
+        "WHERE id NOT IN (SELECT entry_id FROM rag_answer_vectors)"
+    ).fetchall()
+    if not rows:
+        return {"embedded": 0, "skipped_existing": await answer_store.count(), "msg": "no entries need backfill"}
+
+    embedded = 0
+    errors = 0
+    BATCH = 25
+    for i in range(0, len(rows), BATCH):
+        batch = rows[i:i + BATCH]
+        try:
+            vectors = await rag_embed.embed([r[1] for r in batch])
+            for (entry_id, _), vec in zip(batch, vectors):
+                await answer_store.add_answer_vector(entry_id, vec)
+                embedded += 1
+        except Exception:
+            logger.exception("backfill batch failed [%d:%d]", i, i + BATCH)
+            errors += len(batch)
+    return {"embedded": embedded, "errors": errors, "total_now": await answer_store.count()}
+
+
+@router.post("/candidates/rescan-pending")
+async def candidates_rescan_pending(force: bool = False, admin: dict = Depends(get_admin)):
+    """对所有 status='pending' 候选重做答案侧匹配,刷新 suggested_merge_entry_id。
+
+    - force=False(默认): 已有 suggested_merge_entry_id 的不动
+    - force=True: 全部重算
+    """
+    storage = get_storage()
+    rows = storage.conn.execute(
+        "SELECT id, staff_reply, suggested_merge_entry_id "
+        "FROM candidate_phrases WHERE status='pending' "
+        "ORDER BY id"
+    ).fetchall()
+    if not rows:
+        return {"total": 0, "suggested": 0, "errors": 0}
+
+    # 从 candidate_miner 拿阈值
+    from app.candidate_miner import ANSWER_MATCH_THRESHOLD
+
+    suggested = 0
+    errors = 0
+    BATCH = 25
+    for i in range(0, len(rows), BATCH):
+        batch = rows[i:i + BATCH]
+        if not force:
+            batch_todo = [r for r in batch if r[2] is None]
+        else:
+            batch_todo = list(batch)
+        if not batch_todo:
+            continue
+        try:
+            reply_vecs = await rag_embed.embed([r[1] for r in batch_todo])
+        except Exception:
+            logger.exception("rescan batch embed failed [%d:%d]", i, i + BATCH)
+            errors += len(batch_todo)
+            continue
+        for (cid, _, _), rvec in zip(batch_todo, reply_vecs):
+            try:
+                ans_matches = await answer_store.search_answer(rvec, top_k=1)
+                if ans_matches and ans_matches[0]["_similarity"] >= ANSWER_MATCH_THRESHOLD:
+                    storage.conn.execute(
+                        "UPDATE candidate_phrases SET suggested_merge_entry_id=?, answer_match_similarity=? WHERE id=?",
+                        (ans_matches[0]["entry_id"], ans_matches[0]["_similarity"], cid),
+                    )
+                    suggested += 1
+            except Exception:
+                logger.exception("rescan candidate %s failed", cid)
+                errors += 1
+    return {"total": len(rows), "suggested": suggested, "errors": errors}
 
 
 @router.get("/candidates/stats")

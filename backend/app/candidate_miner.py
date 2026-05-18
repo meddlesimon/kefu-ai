@@ -18,14 +18,16 @@ import time
 import httpx
 
 from app.config import settings
+from app.rag import answer_store, embed as rag_embed
 from app.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
-MIN_REPLY_LEN = 20      # < 20 字的回复跳过(敷衍/简短)
-MIN_PARENT_LEN = 5      # 家长 query 太短跳过
-MIN_SCORE = 7.0         # LLM 评分阈值
-PAIR_WINDOW_SECS = 1800 # 客服回复对应家长 query 的时间窗(30 分钟)
+MIN_REPLY_LEN = 20            # < 20 字的回复跳过(敷衍/简短)
+MIN_PARENT_LEN = 5            # 家长 query 太短跳过
+MIN_SCORE = 7.0               # LLM 评分阈值
+PAIR_WINDOW_SECS = 1800       # 客服回复对应家长 query 的时间窗(30 分钟)
+ANSWER_MATCH_THRESHOLD = 0.92 # 答案侧相似度阈值,>= 触发"建议合并",跳过 LLM 评估
 
 
 _EVAL_PROMPT = """你是 K12 教培客服话术整理助手。我有一条客服真实回复,请评估它是否值得沉淀为标准话术,并给出建议。
@@ -114,7 +116,7 @@ async def scan(since_ts: float, until_ts: float) -> dict:
 
     stats = {"total": len(rows), "skip_short": 0, "skip_dup": 0, "skip_no_query": 0,
              "skip_rag_match": 0, "skip_was_ai_adopt": 0, "skip_low_score": 0,
-             "scored": 0, "added": 0, "errors": 0}
+             "scored": 0, "added": 0, "merge_suggested": 0, "errors": 0}
 
     from app.rag import retrieve as rag_retrieve
 
@@ -184,6 +186,42 @@ async def scan(since_ts: float, until_ts: float) -> dict:
         ).fetchone()
         if ai_adopt:
             stats["skip_was_ai_adopt"] += 1
+            continue
+
+        # 答案侧匹配 —— 客服回复跟已采纳 best_answer 高度相似 → 跳过 LLM,直接挂"建议合并"
+        suggested_merge_entry_id = None
+        answer_match_similarity = None
+        try:
+            reply_vec = await rag_embed.embed_one(content)
+            ans_matches = await answer_store.search_answer(reply_vec, top_k=1)
+            if ans_matches and ans_matches[0]["_similarity"] >= ANSWER_MATCH_THRESHOLD:
+                suggested_merge_entry_id = ans_matches[0]["entry_id"]
+                answer_match_similarity = ans_matches[0]["_similarity"]
+        except Exception:
+            logger.exception("答案侧匹配失败 seq=%s (降级走 LLM 评估)", seq)
+
+        if suggested_merge_entry_id is not None:
+            try:
+                storage.conn.execute(
+                    "INSERT INTO candidate_phrases "
+                    "(parent_query, staff_reply, cleaned_reply, suggested_category, "
+                    " suggested_variants, llm_score, llm_reason, source_seq, customer_id, reply_hash, "
+                    " suggested_merge_entry_id, answer_match_similarity) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        parent_query, content, content,
+                        "(待合并)", json.dumps([parent_query], ensure_ascii=False),
+                        round(answer_match_similarity * 10, 2),
+                        "客服回复与已采纳话术答案高度相似",
+                        seq, customer_id, rh,
+                        suggested_merge_entry_id, answer_match_similarity,
+                    ),
+                )
+                stats["merge_suggested"] += 1
+                stats["added"] += 1
+            except Exception:
+                logger.exception("写合并建议候选失败 seq=%s", seq)
+                stats["errors"] += 1
             continue
 
         # LLM 评估
