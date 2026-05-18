@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import api_admin, api_ai, api_attachments, api_events, api_sidebar, archive_pull, wxwork_media
+from app import api_admin, api_ai, api_attachments, api_events, api_sidebar, archive_pull, candidate_miner, wxwork_media
 from app.auth import access_token, admin_auth, jsapi, oauth
 from app.config import settings
 from app.storage import get_storage
@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
     refresh_task = asyncio.create_task(access_token.refresh_loop())
     pull_task = asyncio.create_task(archive_pull.pull_loop())
     media_refresh_task = asyncio.create_task(wxwork_media.refresh_loop())
+    candidate_cron_task = asyncio.create_task(candidate_miner.daily_scheduler(hour_local=5))
 
     try:
         yield
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
         refresh_task.cancel()
         pull_task.cancel()
         media_refresh_task.cancel()
+        candidate_cron_task.cancel()
         logger.info("后端关闭")
 
 

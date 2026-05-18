@@ -218,3 +218,34 @@ async def scan(since_ts: float, until_ts: float) -> dict:
             stats["errors"] += 1
 
     return stats
+
+
+async def daily_scheduler(hour_local: int = 5):
+    """每天北京时间 hour_local 点跑一次,扫描"昨天"客服回复。
+
+    candidate_phrases 写入 status='pending',等待人工去 admin 后台审核 adopt。
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Asia/Shanghai")
+    while True:
+        try:
+            now = datetime.now(tz)
+            next_run = now.replace(hour=hour_local, minute=0, second=0, microsecond=0)
+            if next_run <= now:
+                next_run = next_run + timedelta(days=1)
+            wait_secs = (next_run - now).total_seconds()
+            logger.info("[candidate-cron] 下次扫描 %s,等待 %.0f 秒", next_run, wait_secs)
+            await asyncio.sleep(wait_secs)
+
+            today0 = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+            yest0 = today0 - timedelta(days=1)
+            since, until = yest0.timestamp(), today0.timestamp()
+            logger.info("[candidate-cron] 开始扫昨天 %s → %s", yest0.date(), today0.date())
+            stats = await scan(since, until)
+            logger.info("[candidate-cron] 完成 stats=%s", stats)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[candidate-cron] 异常,1 小时后重试")
+            await asyncio.sleep(3600)
