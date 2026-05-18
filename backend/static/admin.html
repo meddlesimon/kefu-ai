@@ -490,6 +490,36 @@ body {
   overflow: hidden;
 }
 
+/* Top 3 相似老问题(参考) */
+.cand-similar-list {
+  background: #f9fafb;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+.cand-similar-title {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.cand-similar-item {
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cand-similar-item:last-child { border-bottom: none; }
+.cand-similar-text { flex: 1; color: var(--text-2); line-height: 1.4; }
+.cand-similar-text b { color: var(--text-1); }
+.cand-similar-sim {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
 /* 数据统计 */
 .stat-grid {
   display: grid;
@@ -1513,6 +1543,20 @@ async function refreshCandidates() {
           ${isPending ? `<button class="btn btn-sm btn-primary" data-cand-action="merge" data-id="${c.id}" data-entry="${sm.entry_id}">✅ 合并到这个问题(把"${escapeHTML(c.parent_query.length>20?c.parent_query.slice(0,20)+'…':c.parent_query)}"加为该话术的新问法)</button>` : ''}
         </div>
       ` : '';
+      // Top 3 相似老问题(过滤掉 suggested_merge 已显示的那条,避免重复)
+      const similarList = (c.similar_top_n || []).filter(s => !sm || s.entry_id !== sm.entry_id).slice(0, 3);
+      const similarListHtml = similarList.length ? `
+        <div class="cand-similar-list">
+          <div class="cand-similar-title">📋 库里其他比较像的老问题(按家长问句相似度,可作为参考备选):</div>
+          ${similarList.map(s => `
+            <div class="cand-similar-item">
+              <span class="cand-similar-text"><b>#${s.entry_id} · ${escapeHTML(s.category||'未分类')}</b> · ${escapeHTML(s.best_answer_preview||'')}</span>
+              <span class="cand-similar-sim">${(s.similarity*100).toFixed(0)}%</span>
+              ${isPending ? `<button class="btn btn-sm" data-cand-action="merge" data-id="${c.id}" data-entry="${s.entry_id}">合并到此</button>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
       return `
         <div class="card cand-card" data-id="${c.id}">
           <div class="cand-head">
@@ -1530,6 +1574,7 @@ async function refreshCandidates() {
             <div class="cand-text">${escapeHTML(c.staff_reply)}</div>
           </div>
           ${mergeBlockHtml}
+          ${similarListHtml}
           <div class="cand-block cand-cleaned">
             <div class="cand-label">📝 LLM 脱敏建议版本(另存为新问题时用这个)</div>
             <textarea class="textarea cand-edit-answer" rows="4" data-id="${c.id}" ${isPending?'':'disabled'}>${escapeHTML(c.cleaned_reply||c.staff_reply)}</textarea>

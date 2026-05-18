@@ -147,10 +147,11 @@ class Storage:
             self.conn.execute("ALTER TABLE ai_drafts ADD COLUMN last_seq INTEGER DEFAULT 0")
         except Exception:
             pass
-        # 老库兼容: candidate_phrases 加 2 列(忽略已存在错误)
+        # 老库兼容: candidate_phrases 加 3 列(忽略已存在错误)
         for col_sql in (
             "ALTER TABLE candidate_phrases ADD COLUMN suggested_merge_entry_id INTEGER",
             "ALTER TABLE candidate_phrases ADD COLUMN answer_match_similarity  REAL",
+            "ALTER TABLE candidate_phrases ADD COLUMN similar_top_n_cached     TEXT",
         ):
             try:
                 self.conn.execute(col_sql)

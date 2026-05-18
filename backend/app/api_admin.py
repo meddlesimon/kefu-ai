@@ -316,7 +316,7 @@ async def candidates_list(status: str = "pending", admin: dict = Depends(get_adm
         "SELECT id, parent_query, staff_reply, cleaned_reply, suggested_category, "
         "       suggested_variants, llm_score, llm_reason, source_seq, customer_id, "
         "       status, reviewed_by, reviewed_at, rag_entry_id, created_at, "
-        "       suggested_merge_entry_id, answer_match_similarity "
+        "       suggested_merge_entry_id, answer_match_similarity, similar_top_n_cached "
         "FROM candidate_phrases WHERE status = ? ORDER BY llm_score DESC, created_at DESC",
         (status,),
     ).fetchall()
@@ -345,6 +345,12 @@ async def candidates_list(status: str = "pending", admin: dict = Depends(get_adm
         if r[15] and r[15] in entry_map:
             sug_merge = dict(entry_map[r[15]])
             sug_merge["similarity"] = r[16]
+        sim_top_n = []
+        if r[17]:
+            try:
+                sim_top_n = json.loads(r[17])
+            except Exception:
+                sim_top_n = []
         out.append({
             "id": r[0],
             "parent_query": r[1],
@@ -362,6 +368,7 @@ async def candidates_list(status: str = "pending", admin: dict = Depends(get_adm
             "rag_entry_id": r[13],
             "created_at": r[14],
             "suggested_merge": sug_merge,
+            "similar_top_n": sim_top_n,
         })
     return out
 
@@ -529,53 +536,68 @@ async def rag_backfill_answer_vectors(admin: dict = Depends(get_admin)):
 
 @router.post("/candidates/rescan-pending")
 async def candidates_rescan_pending(force: bool = False, admin: dict = Depends(get_admin)):
-    """对所有 status='pending' 候选重做答案侧匹配,刷新 suggested_merge_entry_id。
+    """对所有 status='pending' 候选重做答案侧匹配 + 刷新家长侧 Top 3 相似快照。
 
-    - force=False(默认): 已有 suggested_merge_entry_id 的不动
+    - force=False(默认): 已有 suggested_merge_entry_id 的不动答案匹配标记,但 similar_top_n 仍会刷
     - force=True: 全部重算
     """
     storage = get_storage()
     rows = storage.conn.execute(
-        "SELECT id, staff_reply, suggested_merge_entry_id "
+        "SELECT id, parent_query, staff_reply, suggested_merge_entry_id "
         "FROM candidate_phrases WHERE status='pending' "
         "ORDER BY id"
     ).fetchall()
     if not rows:
-        return {"total": 0, "suggested": 0, "errors": 0}
+        return {"total": 0, "suggested": 0, "refreshed_similar": 0, "errors": 0}
 
-    # 从 candidate_miner 拿阈值
-    from app.candidate_miner import ANSWER_MATCH_THRESHOLD
+    from app.candidate_miner import ANSWER_MATCH_THRESHOLD, _compact_similar
+    from app.rag import retrieve as rag_retrieve
 
     suggested = 0
+    refreshed = 0
     errors = 0
     BATCH = 25
     for i in range(0, len(rows), BATCH):
         batch = rows[i:i + BATCH]
+        # 答案侧 embed: 需要的子集
         if not force:
-            batch_todo = [r for r in batch if r[2] is None]
+            batch_for_ans = [r for r in batch if r[3] is None]
         else:
-            batch_todo = list(batch)
-        if not batch_todo:
-            continue
-        try:
-            reply_vecs = await rag_embed.embed([r[1] for r in batch_todo])
-        except Exception:
-            logger.exception("rescan batch embed failed [%d:%d]", i, i + BATCH)
-            errors += len(batch_todo)
-            continue
-        for (cid, _, _), rvec in zip(batch_todo, reply_vecs):
+            batch_for_ans = list(batch)
+        if batch_for_ans:
             try:
-                ans_matches = await answer_store.search_answer(rvec, top_k=1)
-                if ans_matches and ans_matches[0]["_similarity"] >= ANSWER_MATCH_THRESHOLD:
-                    storage.conn.execute(
-                        "UPDATE candidate_phrases SET suggested_merge_entry_id=?, answer_match_similarity=? WHERE id=?",
-                        (ans_matches[0]["entry_id"], ans_matches[0]["_similarity"], cid),
-                    )
-                    suggested += 1
+                reply_vecs = await rag_embed.embed([r[2] for r in batch_for_ans])
             except Exception:
-                logger.exception("rescan candidate %s failed", cid)
+                logger.exception("rescan batch reply-embed failed [%d:%d]", i, i + BATCH)
+                errors += len(batch_for_ans)
+                reply_vecs = None
+            if reply_vecs:
+                for (cid, _, _, _), rvec in zip(batch_for_ans, reply_vecs):
+                    try:
+                        ans_matches = await answer_store.search_answer(rvec, top_k=1)
+                        if ans_matches and ans_matches[0]["_similarity"] >= ANSWER_MATCH_THRESHOLD:
+                            storage.conn.execute(
+                                "UPDATE candidate_phrases SET suggested_merge_entry_id=?, answer_match_similarity=? WHERE id=?",
+                                (ans_matches[0]["entry_id"], ans_matches[0]["_similarity"], cid),
+                            )
+                            suggested += 1
+                    except Exception:
+                        logger.exception("rescan candidate %s (answer side) failed", cid)
+                        errors += 1
+        # 家长侧 Top 3 刷新(总是刷)
+        for cid, parent_q, _, _ in batch:
+            try:
+                sim_raw = await rag_retrieve.retrieve(parent_q or "", top_k=3, customer_id="")
+                sim_json = json.dumps([_compact_similar(x) for x in sim_raw], ensure_ascii=False)
+                storage.conn.execute(
+                    "UPDATE candidate_phrases SET similar_top_n_cached=? WHERE id=?",
+                    (sim_json, cid),
+                )
+                refreshed += 1
+            except Exception:
+                logger.exception("rescan candidate %s (similar) failed", cid)
                 errors += 1
-    return {"total": len(rows), "suggested": suggested, "errors": errors}
+    return {"total": len(rows), "suggested": suggested, "refreshed_similar": refreshed, "errors": errors}
 
 
 @router.get("/candidates/stats")

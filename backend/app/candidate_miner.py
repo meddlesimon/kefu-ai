@@ -102,6 +102,18 @@ def _reply_hash(reply: str) -> str:
     return hashlib.sha1(reply[:200].encode("utf-8")).hexdigest()
 
 
+def _compact_similar(item: dict) -> dict:
+    """裁剪 rag_retrieve.retrieve 返回的字典为 UI 最小字段。"""
+    ans = item.get("answer") or ""
+    preview = ans if len(ans) <= 80 else ans[:80] + "…"
+    return {
+        "entry_id": item.get("id"),
+        "category": item.get("category"),
+        "best_answer_preview": preview,
+        "similarity": item.get("similarity"),
+    }
+
+
 async def scan(since_ts: float, until_ts: float) -> dict:
     """扫描时间窗内客服回复 → LLM 评估 → 写候选池。返回统计。"""
     storage = get_storage()
@@ -166,14 +178,18 @@ async def scan(since_ts: float, until_ts: float) -> dict:
             stats["skip_no_query"] += 1
             continue
 
-        # 已有相似话术(避免重复入库)
+        # 算 similar_top_n (家长侧 Top 3 相似话术) —— 候选卡 UI 展示用 + 严匹配检查
+        similar_top_n = []
         try:
-            cands = await rag_retrieve.retrieve(parent_query, top_k=1, customer_id="")
-            if cands and cands[0]["similarity"] >= 0.85:
+            similar_raw = await rag_retrieve.retrieve(parent_query, top_k=3, customer_id="")
+            similar_top_n = [_compact_similar(x) for x in similar_raw]
+            # 已有相似话术(严匹配,避免重复入库)
+            if similar_raw and similar_raw[0]["similarity"] >= 0.85:
                 stats["skip_rag_match"] += 1
                 continue
         except Exception:
-            pass
+            logger.exception("similar_top_n 检索失败 seq=%s (降级继续)", seq)
+        similar_top_n_json = json.dumps(similar_top_n, ensure_ascii=False) if similar_top_n else None
 
         # 已经是 AI 一字不差采用的(已沉淀)
         ai_adopt = storage.conn.execute(
@@ -206,8 +222,8 @@ async def scan(since_ts: float, until_ts: float) -> dict:
                     "INSERT INTO candidate_phrases "
                     "(parent_query, staff_reply, cleaned_reply, suggested_category, "
                     " suggested_variants, llm_score, llm_reason, source_seq, customer_id, reply_hash, "
-                    " suggested_merge_entry_id, answer_match_similarity) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " suggested_merge_entry_id, answer_match_similarity, similar_top_n_cached) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         parent_query, content, content,
                         "(待合并)", json.dumps([parent_query], ensure_ascii=False),
@@ -215,6 +231,7 @@ async def scan(since_ts: float, until_ts: float) -> dict:
                         "客服回复与已采纳话术答案高度相似",
                         seq, customer_id, rh,
                         suggested_merge_entry_id, answer_match_similarity,
+                        similar_top_n_json,
                     ),
                 )
                 stats["merge_suggested"] += 1
@@ -241,13 +258,15 @@ async def scan(since_ts: float, until_ts: float) -> dict:
             storage.conn.execute(
                 "INSERT INTO candidate_phrases "
                 "(parent_query, staff_reply, cleaned_reply, suggested_category, "
-                " suggested_variants, llm_score, llm_reason, source_seq, customer_id, reply_hash) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " suggested_variants, llm_score, llm_reason, source_seq, customer_id, reply_hash, "
+                " similar_top_n_cached) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     parent_query, content, ev["cleaned"],
                     ev["category"], json.dumps(ev["variants"], ensure_ascii=False),
                     ev["score"], ev["reason"],
                     seq, customer_id, rh,
+                    similar_top_n_json,
                 ),
             )
             stats["added"] += 1
