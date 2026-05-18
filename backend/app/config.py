@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     doubao_api_key: str = ""
     doubao_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
 
+    # 话术挖掘 - 答案侧相似度阈值(>= 则建议合并到已有 entry,跳过 LLM 评估)
+    candidate_answer_match_threshold: float = 0.92
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

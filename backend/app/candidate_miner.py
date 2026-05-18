@@ -27,7 +27,7 @@ MIN_REPLY_LEN = 20            # < 20 字的回复跳过(敷衍/简短)
 MIN_PARENT_LEN = 5            # 家长 query 太短跳过
 MIN_SCORE = 7.0               # LLM 评分阈值
 PAIR_WINDOW_SECS = 1800       # 客服回复对应家长 query 的时间窗(30 分钟)
-ANSWER_MATCH_THRESHOLD = 0.92 # 答案侧相似度阈值,>= 触发"建议合并",跳过 LLM 评估
+ANSWER_MATCH_THRESHOLD = settings.candidate_answer_match_threshold  # 答案侧相似度阈值,>= 触发"建议合并"
 
 
 _EVAL_PROMPT = """你是 K12 教培客服话术整理助手。我有一条客服真实回复,请评估它是否值得沉淀为标准话术,并给出建议。
