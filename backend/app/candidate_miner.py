@@ -28,6 +28,7 @@ MIN_PARENT_LEN = 5            # 家长 query 太短跳过
 MIN_SCORE = 7.0               # LLM 评分阈值
 PAIR_WINDOW_SECS = 1800       # 客服回复对应家长 query 的时间窗(30 分钟)
 MAX_PARENT_MSGS = 5           # 拼接家长消息上限(连发多句构成一个问题时用)
+PARENT_GROUP_GAP = 300        # 家长消息之间间隔 <= 该秒数算同一组(5 分钟)
 ANSWER_MATCH_THRESHOLD = settings.candidate_answer_match_threshold  # 答案侧相似度阈值,>= 触发"建议合并"
 
 
@@ -106,34 +107,35 @@ def _reply_hash(reply: str) -> str:
 def gather_parent_query(storage, customer_id: str, staff_recv_at: float) -> str:
     """拼接客服回复之前一段连续家长 text(可能多句构成同一个问题)。
 
-    锚点: 客服回复之前最后一条 >= MIN_REPLY_LEN 字的客服 text
-    (短确认 "稍等"/"好的" 忽略)。没有锚点就退到 PAIR_WINDOW_SECS 前。
-    把 [anchor, staff_recv_at) 之间最近 MAX_PARENT_MSGS 条家长 text 按时间正序拼接。
+    在 PAIR_WINDOW_SECS 时间窗内,取此客户的家长 text 消息;
+    从最新往前看,只要相邻两条家长消息间隔 <= PARENT_GROUP_GAP 就算同一组,
+    上限 MAX_PARENT_MSGS。时间正序拼接输出。
+
+    这个逻辑跨越中间的客服回复(因为客服回复多个问题时可能交错)。
     """
-    row = storage.conn.execute(
-        "SELECT received_at FROM chat_messages "
-        "WHERE received_at > ? AND received_at < ? AND msg_type='text' "
-        "  AND from_user NOT LIKE 'wm%' "
-        "  AND LENGTH(json_extract(raw_json, '$.text.content')) >= ? "
-        "ORDER BY seq DESC LIMIT 1",
-        (staff_recv_at - PAIR_WINDOW_SECS, staff_recv_at, MIN_REPLY_LEN),
-    ).fetchone()
-    window_start = row[0] if row else (staff_recv_at - PAIR_WINDOW_SECS)
     rows = storage.conn.execute(
-        "SELECT raw_json FROM chat_messages "
+        "SELECT received_at, raw_json FROM chat_messages "
         "WHERE received_at > ? AND received_at < ? "
         "  AND msg_type='text' AND from_user = ? "
-        "ORDER BY seq DESC LIMIT ?",
-        (window_start, staff_recv_at, customer_id, MAX_PARENT_MSGS),
+        "ORDER BY seq DESC LIMIT 30",
+        (staff_recv_at - PAIR_WINDOW_SECS, staff_recv_at, customer_id),
     ).fetchall()
+    if not rows:
+        return ""
     parent_msgs = []
-    for (raw_p,) in reversed(rows):  # 时间正序
+    prev_t = None
+    for t, raw_p in rows:
+        if prev_t is not None and (prev_t - t) > PARENT_GROUP_GAP:
+            break
         try:
             c = json.loads(raw_p).get("text", {}).get("content", "")
             if c and c.strip():
-                parent_msgs.append(c.strip())
+                parent_msgs.insert(0, c.strip())
+                prev_t = t
         except Exception:
             pass
+        if len(parent_msgs) >= MAX_PARENT_MSGS:
+            break
     return "\n".join(parent_msgs)
 
 
