@@ -27,6 +27,7 @@ MIN_REPLY_LEN = 20            # < 20 字的回复跳过(敷衍/简短)
 MIN_PARENT_LEN = 5            # 家长 query 太短跳过
 MIN_SCORE = 7.0               # LLM 评分阈值
 PAIR_WINDOW_SECS = 1800       # 客服回复对应家长 query 的时间窗(30 分钟)
+MAX_PARENT_MSGS = 5           # 拼接家长消息上限(连发多句构成一个问题时用)
 ANSWER_MATCH_THRESHOLD = settings.candidate_answer_match_threshold  # 答案侧相似度阈值,>= 触发"建议合并"
 
 
@@ -102,6 +103,40 @@ def _reply_hash(reply: str) -> str:
     return hashlib.sha1(reply[:200].encode("utf-8")).hexdigest()
 
 
+def gather_parent_query(storage, customer_id: str, staff_recv_at: float) -> str:
+    """拼接客服回复之前一段连续家长 text(可能多句构成同一个问题)。
+
+    锚点: 客服回复之前最后一条 >= MIN_REPLY_LEN 字的客服 text
+    (短确认 "稍等"/"好的" 忽略)。没有锚点就退到 PAIR_WINDOW_SECS 前。
+    把 [anchor, staff_recv_at) 之间最近 MAX_PARENT_MSGS 条家长 text 按时间正序拼接。
+    """
+    row = storage.conn.execute(
+        "SELECT received_at FROM chat_messages "
+        "WHERE received_at > ? AND received_at < ? AND msg_type='text' "
+        "  AND from_user NOT LIKE 'wm%' "
+        "  AND LENGTH(json_extract(raw_json, '$.text.content')) >= ? "
+        "ORDER BY seq DESC LIMIT 1",
+        (staff_recv_at - PAIR_WINDOW_SECS, staff_recv_at, MIN_REPLY_LEN),
+    ).fetchone()
+    window_start = row[0] if row else (staff_recv_at - PAIR_WINDOW_SECS)
+    rows = storage.conn.execute(
+        "SELECT raw_json FROM chat_messages "
+        "WHERE received_at > ? AND received_at < ? "
+        "  AND msg_type='text' AND from_user = ? "
+        "ORDER BY seq DESC LIMIT ?",
+        (window_start, staff_recv_at, customer_id, MAX_PARENT_MSGS),
+    ).fetchall()
+    parent_msgs = []
+    for (raw_p,) in reversed(rows):  # 时间正序
+        try:
+            c = json.loads(raw_p).get("text", {}).get("content", "")
+            if c and c.strip():
+                parent_msgs.append(c.strip())
+        except Exception:
+            pass
+    return "\n".join(parent_msgs)
+
+
 def _compact_similar(item: dict) -> dict:
     """裁剪 rag_retrieve.retrieve 返回的字典为 UI 最小字段。"""
     ans = item.get("answer") or ""
@@ -158,23 +193,9 @@ async def scan(since_ts: float, until_ts: float) -> dict:
             stats["skip_no_query"] += 1
             continue
 
-        # 找客服这条之前 30 分钟内最近的家长 text
-        parent_row = storage.conn.execute(
-            "SELECT raw_json FROM chat_messages "
-            "WHERE from_user = ? AND msg_type='text' "
-            "  AND received_at < ? AND received_at > ? "
-            "ORDER BY seq DESC LIMIT 1",
-            (customer_id, recv_at, recv_at - PAIR_WINDOW_SECS),
-        ).fetchone()
-        if not parent_row:
-            stats["skip_no_query"] += 1
-            continue
-        try:
-            parent_query = json.loads(parent_row[0]).get("text", {}).get("content", "")
-        except Exception:
-            stats["skip_no_query"] += 1
-            continue
-        if len(parent_query) < MIN_PARENT_LEN:
+        # 拼接客服回复之前一段连续家长 text(可能多句构成一个问题)
+        parent_query = gather_parent_query(storage, customer_id, recv_at)
+        if not parent_query or len(parent_query) < MIN_PARENT_LEN:
             stats["skip_no_query"] += 1
             continue
 

@@ -490,6 +490,19 @@ body {
   overflow: hidden;
 }
 
+.cand-edit-wrap.cand-edit-collapsed > .cand-block { display: none; }
+.cand-edit-toggle-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  font-style: italic;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-radius: 4px;
+  margin: 4px 0;
+  display: none;
+}
+.cand-edit-wrap.cand-edit-collapsed > .cand-edit-toggle-hint { display: block; }
+
 /* Top 3 相似老问题(参考) */
 .cand-similar-list {
   background: #f9fafb;
@@ -1575,15 +1588,17 @@ async function refreshCandidates() {
           </div>
           ${mergeBlockHtml}
           ${similarListHtml}
-          <div class="cand-block cand-cleaned">
-            <div class="cand-label">📝 LLM 脱敏建议版本(另存为新问题时用这个)</div>
-            <textarea class="textarea cand-edit-answer" rows="4" data-id="${c.id}" ${isPending?'':'disabled'}>${escapeHTML(c.cleaned_reply||c.staff_reply)}</textarea>
-          </div>
-          <div class="cand-block">
-            <div class="cand-label">📌 入库分类 + 变体(另存为新问题时用,可改)</div>
-            <input type="text" class="input cand-edit-cat" data-id="${c.id}" value="${escapeHTML(c.suggested_category||'')}" ${isPending?'':'disabled'}>
-            <textarea class="textarea cand-edit-vars" rows="3" data-id="${c.id}" ${isPending?'':'disabled'} placeholder="每行一条变体">${variants.map(v=>escapeHTML(v)).join('\n')}\n${escapeHTML(c.parent_query)}</textarea>
-            <div style="font-size:10px;color:var(--text-3);margin-top:4px;">默认会把家长原问 + LLM 推的 4 个变体入库,你可改</div>
+          <div class="cand-edit-wrap ${sm ? 'cand-edit-collapsed' : ''}" data-edit-wrap="${c.id}">
+            <div class="cand-edit-toggle-hint">📝 想"另存为新问题"? 点下方按钮展开编辑区</div>
+            <div class="cand-block cand-cleaned">
+              <div class="cand-label">📝 LLM 脱敏建议版本(另存为新问题时用)</div>
+              <textarea class="textarea cand-edit-answer" rows="3" data-id="${c.id}" ${isPending?'':'disabled'}>${escapeHTML(c.cleaned_reply||c.staff_reply)}</textarea>
+            </div>
+            <div class="cand-block">
+              <div class="cand-label">📌 分类 + 变体(可改)</div>
+              <input type="text" class="input cand-edit-cat" data-id="${c.id}" value="${escapeHTML(c.suggested_category||'')}" ${isPending?'':'disabled'}>
+              <textarea class="textarea cand-edit-vars" rows="2" data-id="${c.id}" ${isPending?'':'disabled'} placeholder="每行一条变体">${variants.map(v=>escapeHTML(v)).join('\n')}\n${escapeHTML(c.parent_query)}</textarea>
+            </div>
           </div>
           ${isPending ? `
             <div class="row" style="margin-top:10px;">
@@ -1632,8 +1647,15 @@ $('candidates-list').addEventListener('click', async (e) => {
       refreshStats();
     } catch (err) { showToast('合并失败: ' + err.message, 'error'); btn.disabled = false; btn.textContent = origLabel; }
   } else if (action === 'adopt') {
-    btn.disabled = true; btn.textContent = '入库中…';
     const card = btn.closest('.cand-card');
+    const wrap = card.querySelector('.cand-edit-wrap');
+    // 折叠状态下第一次点击只展开,第二次才提交
+    if (wrap && wrap.classList.contains('cand-edit-collapsed')) {
+      wrap.classList.remove('cand-edit-collapsed');
+      btn.textContent = '✓ 确认入库';
+      return;
+    }
+    btn.disabled = true; btn.textContent = '入库中…';
     const answer = card.querySelector('.cand-edit-answer').value;
     const category = card.querySelector('.cand-edit-cat').value.trim();
     const variants = card.querySelector('.cand-edit-vars').value
